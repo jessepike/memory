@@ -9,7 +9,7 @@ updated: "2026-02-10"
 ## Current State
 
 - **Phase:** Develop — In Progress
-- **Focus:** Packaging/bootstrap path documented and verified in a clean venv. Next: final docs alignment and consistency pass across design/brief/status/backlog.
+- **Focus:** Documentation consistency pass complete across design/brief/status/backlog. Implementation and docs are now aligned for current scope.
 
 ## Next Steps
 
@@ -32,7 +32,7 @@ updated: "2026-02-10"
 - [x] Develop Step 13 — Scope-authorization hardening for update/archive defense-in-depth
 - [x] Develop Step 14 — MCP-level integration tests for tool surface + error contracts
 - [x] Develop Step 15 — Packaging/dev setup command docs + bootstrap verification
-- [ ] Develop Step 16 — Final docs consistency alignment (design/brief/status/backlog)
+- [x] Develop Step 16 — Final docs consistency alignment (design/brief/status/backlog)
 
 ## Pending Decisions
 
@@ -105,3 +105,4 @@ updated: "2026-02-10"
 | 2026-02-10 | Completed DEV-13 scope hardening: non-privileged callers now must provide matching namespace for ID-based `update_memory` and `archive_memory`. Added regression tests for missing/mismatched namespace guards. Full test suite and smoke checklist passing. |
 | 2026-02-10 | Completed DEV-14 MCP integration tests: added end-to-end tool flow coverage and explicit forbidden-scope/namespace mismatch contract checks at the MCP layer. Updated test payload parsing for FastMCP response shape variants. Full test suite and smoke checklist passing. |
 | 2026-02-10 | Completed DEV-15 packaging/bootstrap verification: updated README with concrete setup/dev/test/smoke/server commands, then validated in fresh `/tmp` venv using editable install (`pip install -e .[dev]`), full pytest pass, and smoke success (`tool_count=14`, `success=true`). |
+| 2026-02-10 | Completed DEV-16 documentation alignment: reconciled design wording with implemented MCP surface (core + maintenance tools), updated discover brief to mark caller-identity enforcement resolved via Design D1, and synchronized backlog/status completion state. |

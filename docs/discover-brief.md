@@ -62,7 +62,7 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 - [ ] Agents can write memories with scope, type, and visibility metadata
 - [ ] Agents can search memories by semantic query with scope filtering
 - [ ] Project-scoped agents see only project + global memories (isolation)
-- [ ] Cross-scope queries work for authorized consumers (e.g., Krypton)
+- [ ] Cross-scope queries work for policy-allowed trusted consumers (e.g., Krypton)
 - [ ] Manual entries can be added via MCP tool
 - [ ] Memory entries persist across sessions
 - [ ] Write-time consolidation prevents duplicate entries — writing the same fact twice does not create two entries
@@ -73,7 +73,7 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 
 - Follow KB project's architectural patterns (SQLite + Chroma + MCP) for consistency
 - Local-first — no external service dependencies; embeddings must be computed by a local/offline model (no cloud embedding API dependencies)
-- Single-user — no auth/multi-tenant complexity
+- Single-user trusted-local policy model — no multi-user auth/multi-tenant complexity in MVP
 - Python (consistent with KB project)
 - MCP server as primary interface
 - Clean-sheet implementation — informed by ACK, not dependent on it
@@ -82,7 +82,7 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 
 ## Open Questions
 
-> 8 of 9 questions resolved for MVP. Q9 (caller identity) deferred to Design. Full analysis: `docs/adf/open-questions-research.md`
+> All 9 questions are now resolved for MVP. Q9 (caller identity) was resolved in Design via caller-provided identity + client-profile policy enforcement (D1). Full analysis: `docs/adf/open-questions-research.md`
 
 - [x] **Curation workflow** — Write-time consolidation using vector similarity + rules for MVP (not LLM-based). Review candidates surfaced via MCP tool. No TUI/CLI needed — MCP tools sufficient. ACK lesson: staging state required from day one, but curation as a separate phase was over-engineered. LLM-based ADD/UPDATE/DELETE/NOOP (Mem0 pattern) deferred to post-MVP.
 - [x] **Single store vs partitioned** — Single store with namespace metadata. SQLite + Chroma (KB pattern). Scoping enforced at query time via metadata filtering. Physical partitioning adds complexity for zero benefit at personal scale.
@@ -92,7 +92,7 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 - [x] **Write-back paths** — Hot path for MVP: explicit `write_memory` tool call (includes session-end calls as part of ADF discipline). Warm path (system-level session-end hook extraction) and cold path (background consolidation, decay) deferred until volume demands.
 - [x] **Cross-channel access architecture** — MCP-only for MVP. Core as Python library with clean API; MCP server is one interface, REST adapter is future second interface. Neither contains business logic.
 - [x] **State-based vs retrieval-based** — Retrieval-first for MVP. All memories stored as atomic facts with vector embeddings. State profiles (entity-level summaries) added later as a layer on top when entity coherence is needed.
-- [ ] **Caller identity for scope enforcement** — Design must define how caller identity is conveyed to the MCP server (e.g., caller_id in MCP context, derived from project path) so scope isolation can be enforced. Single-user, no auth — but the server needs to know which project namespace a caller belongs to. Flagged by external review.
+- [x] **Caller identity for scope enforcement** — Resolved in Design (D1): caller-provided identity (`writer_id` / `caller_id`) is policy-validated against static client profiles (`allowed_namespaces`, `can_cross_scope`, `can_access_private`) before scope resolution and ID-based tool access.
 
 ## Issue Log
 

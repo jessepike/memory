@@ -93,7 +93,7 @@ memory/
 ### Key Architectural Decisions
 
 - **Core library pattern** — All business logic in `MemoryStorage`. MCP server is a thin dispatch layer. This enables future REST adapter without duplicating logic (Brief success criterion #10).
-- **Local embeddings** — Diverges from KB (which uses OpenAI cloud). Uses sentence-transformers `all-MiniLM-L6-v2` for offline operation. No external API dependencies.
+- **Local embeddings** — Diverges from KB (which uses OpenAI cloud). Uses sentence-transformers `all-MiniLM-L6-v2` for offline operation with setup-time provisioning and runtime-offline execution.
 - **Staged commit** — Follows KB's pattern: SQLite write (staged) → embed → Chroma write → SQLite update (committed). Idempotent vector writes make rollback unnecessary.
 
 ## Tech Stack
@@ -104,7 +104,7 @@ memory/
 | Package mgr | uv | KB consistency |
 | Structured store | SQLite (WAL mode) | KB pattern, local-first |
 | Vector store | ChromaDB >= 0.4.0 | KB pattern, local persistence |
-| Embeddings | sentence-transformers `all-MiniLM-L6-v2` | 384 dims, ~80MB, local-only, Chroma-compatible |
+| Embeddings | sentence-transformers `all-MiniLM-L6-v2` | 384 dims, ~80MB, setup-time provisioned, runtime-offline, Chroma-compatible |
 | Data models | Pydantic v2 | KB pattern, validation |
 | MCP | mcp >= 1.0.0 | Protocol library |
 | Testing | pytest, pytest-asyncio, pytest-cov | KB pattern |
@@ -124,6 +124,7 @@ memory/
 | `writer_id` | TEXT | NOT NULL | Who wrote it (e.g., "adf-agent", "krypton", "user") |
 | `writer_type` | TEXT | NOT NULL | agent, user, system |
 | `source_project` | TEXT | | Originating project (context, may differ from namespace) |
+| `idempotency_key` | TEXT | NOT NULL | Deterministic write key: `namespace + canonical_content_hash` |
 | `confidence` | REAL | DEFAULT 1.0 | 0.0-1.0, low values surface in review_candidates |
 | `status` | TEXT | NOT NULL, DEFAULT 'staged' | staged, committed, failed, archived |
 | `created_at` | TEXT | NOT NULL | ISO 8601 timestamp |
@@ -134,6 +135,7 @@ memory/
 - `idx_memories_type` on (memory_type)
 - `idx_memories_created` on (created_at DESC)
 - `idx_memories_status` on (status)
+- `idx_memories_idempotency_active` UNIQUE on (`idempotency_key`) WHERE `status IN ('staged','committed')`
 
 ### Chroma Collection: `memories`
 
@@ -156,15 +158,27 @@ memory/
 | Global | `"global"` | Always included in search | `namespace="global"` |
 | Private | `"private"` | Excluded from search unless explicitly requested | `namespace="private"` |
 
-**Search resolution:**
+**Search resolution (after caller profile enforcement):**
 
 | Caller passes | Searches | Use case |
 |---------------|----------|----------|
 | `namespace="memory-layer"` | memory-layer + global | Project agent — sees own scope + global |
 | `namespace="private"` | private only | Explicit private query |
-| *namespace omitted* | All namespaces except private | Cross-scope consumer (e.g., Krypton) |
+| *namespace omitted* | All namespaces except private (only if caller profile has `can_cross_scope=true`) | Policy-allowed cross-scope consumer (e.g., Krypton) |
 
-All searches exclude `status = "archived"`.
+All searches also require namespace eligibility from caller profile.
+
+### Scope Resolution Contract
+
+All read-like tools use one shared scope resolver:
+
+- Input: `caller_profile` + optional `namespace` parameter
+- Output: effective namespace set for query execution
+- Rules:
+  - If `namespace` is provided: resolve to `{namespace, global}` except when `namespace="private"` (private only)
+  - If `namespace` is omitted: resolve to all non-private namespaces only when `can_cross_scope=true`
+  - Private namespace is excluded by default and only included on explicit private request with `can_access_private=true`
+  - Final result is intersected with `caller_profile.allowed_namespaces`
 
 ### Status State Machine
 
@@ -172,13 +186,52 @@ All searches exclude `status = "archived"`.
 staged → committed    (normal write path)
 staged → failed       (embedding or Chroma failure)
 committed → archived  (soft delete via archive_memory)
+failed → committed    (retry succeeds via maintenance API)
+failed → archived     (operator archives unrecoverable failed row)
 ```
+
+### Read Visibility Invariant
+
+User-facing reads and stats are committed-only:
+
+- `search_memories`, `get_recent`, `get_session_context`, `review_candidates`, `get_stats` include only `status="committed"`
+- `staged` and `failed` are internal lifecycle states and excluded from normal read surfaces
+- `archived` is excluded from normal read surfaces by design
+
+### Dual-Store Consistency Policy
+
+SQLite is the source of truth for lifecycle state (`status`) and metadata. Chroma is the retrieval index.
+
+Consistency invariants:
+
+- `status="committed"` in SQLite should have a matching Chroma vector document
+- `status="archived"` in SQLite should not exist in Chroma
+- Reconciliation is idempotent and safe to run multiple times
+
+Reconciliation operation (`reconcile_dual_store`, maintenance API in core):
+
+1. Find committed SQLite rows missing in Chroma → re-embed + Chroma upsert
+2. Find archived SQLite rows still present in Chroma → Chroma delete
+3. Find Chroma IDs with no SQLite row (orphans) → Chroma delete
+4. Emit reconciliation summary metrics and timestamp
+
+Failure lifecycle maintenance APIs (core + MCP maintenance tools):
+
+- `list_failed_memories(limit, older_than_days)` for operator inspection
+- `retry_failed_memory(id)` to re-run embed + vector write + status transition to committed
+- `archive_failed_memory(id)` for unrecoverable failed rows
+
+Failure handling:
+
+- Update/archive paths are Chroma-first to avoid exposing stale vectors after SQLite mutation.
+- If SQLite mutation fails after a successful Chroma mutation, operation returns partial-failure metadata and flags reconciliation required.
+- Reconciliation is the canonical repair mechanism; no manual row surgery required.
 
 ## Interface: MCP Tools
 
 ### Overview
 
-9 tools across 4 categories. All tools accept JSON parameters and return JSON responses.
+Core surface is 9 tools across 4 categories. Current implementation also exposes 5 maintenance/health tools via MCP (reconcile + failed-memory lifecycle + health), for 14 total tool endpoints.
 
 ### Write Tools
 
@@ -205,17 +258,21 @@ Consolidation runs before write — see Write-Time Consolidation section.
 | id | string | yes | Memory UUID |
 | content | string | no | Updated text (triggers re-embedding) |
 | memory_type | string | no | Updated type |
-| namespace | string | no | Updated namespace |
+| namespace | string | no | Updated namespace; required for non-privileged callers and must match row namespace |
 | confidence | float | no | Updated confidence |
 
 Returns: `{ id, updated_fields: [...] }`
 
 **Update flow (dual-store, Chroma-first ordering):**
 1. Validate entry exists in SQLite (status = "committed")
-2. If `content` changed: generate new embedding → `collection.upsert(ids=[id], embeddings=[emb], documents=[content], metadatas=[meta])` → update SQLite fields + `updated_at`
-3. If only metadata changed: `collection.update(ids=[id], metadatas=[meta])` → update SQLite fields + `updated_at`
-4. No staged status for updates — entry remains "committed" throughout
-5. **Ordering rationale:** Chroma operation first. If Chroma fails, SQLite is unchanged (consistent). If SQLite fails after Chroma succeeds, next update corrects the drift.
+2. Run `authorize_memory_access(caller_profile, row)` using the loaded row namespace
+3. If caller is non-privileged, require `namespace` param and enforce `namespace == row.namespace` (defense in depth)
+4. If `content` changed: generate new embedding → `collection.upsert(ids=[id], embeddings=[emb], documents=[content], metadatas=[meta])` → update SQLite fields + `updated_at`
+5. If only metadata changed: `collection.update(ids=[id], metadatas=[meta])` → update SQLite fields + `updated_at`
+6. No staged status for updates — entry remains "committed" throughout
+7. **Ordering rationale:** Chroma operation first. If Chroma fails, SQLite is unchanged (consistent). If SQLite fails after Chroma succeeds, next update corrects the drift.
+
+Unauthorized access returns `{ error_code: "forbidden_scope", id, namespace, caller_id }`.
 
 ### Read Tools
 
@@ -224,36 +281,52 @@ Returns: `{ id, updated_fields: [...] }`
 | Param | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | query | string | yes | | Search query |
-| namespace | string | no | | If set, searches this namespace + global. If omitted, searches all except private (cross-scope). |
+| namespace | string | no | | Optional scope hint resolved by Scope Resolution Contract |
 | memory_type | string | no | | Filter by type |
 | limit | int | no | 10 | Max results |
 
 Returns: `[{ id, content, memory_type, namespace, similarity, writer_id, created_at }]`
 
+Read visibility: `status="committed"` only.
+Scope behavior: resolved by Scope Resolution Contract.
+
 **`get_memory`** — Get a single memory by ID.
 
+Authorization flow:
+1. Load row by `id`
+2. Run `authorize_memory_access(caller_profile, row)`
+3. Return full row only if scope-allowed
+
 Returns: Full memory entry (all fields).
+
+Unauthorized access returns `{ error_code: "forbidden_scope", id, namespace, caller_id }`.
 
 **`get_recent`** — Get recent memories.
 
 | Param | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| namespace | string | no | | Filter by namespace |
+| namespace | string | no | | Optional scope hint resolved by Scope Resolution Contract |
 | memory_type | string | no | | Filter by type |
 | limit | int | no | 20 | Max results |
 | days | int | no | 7 | Lookback window |
 
 Returns: `[{ id, content, memory_type, namespace, writer_id, created_at }]`
 
+Read visibility: `status="committed"` only.
+Scope behavior: resolved by Scope Resolution Contract.
+
 **`get_session_context`** — Contextual retrieval for session start.
 
 | Param | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| namespace | string | yes | | Project namespace |
+| namespace | string | no | | Optional scope hint resolved by Scope Resolution Contract |
 | query | string | no | | Optional focus query |
 | limit | int | no | 10 | Max per section |
 
 Returns: `{ recent: [...], relevant: [...] }` — recent entries for namespace + semantic matches if query provided.
+
+Read visibility: both `recent` and `relevant` are `status="committed"` only.
+Scope behavior: resolved by Scope Resolution Contract.
 
 ### Manage Tools
 
@@ -262,14 +335,26 @@ Returns: `{ recent: [...], relevant: [...] }` — recent entries for namespace +
 | Param | Type | Required |
 |-------|------|----------|
 | id | string | yes |
+| namespace | string | no | Required for non-privileged callers; must match row namespace |
 
-**Archive flow (Chroma-first ordering):** `collection.delete(ids=[id])` → update SQLite status = "archived". If Chroma delete fails, entry remains searchable (safe fallback). Returns: `{ id, archived: true }`
+**Archive flow (Chroma-first ordering):**
+1. Load row by `id` (must be `status = "committed"`)
+2. Run `authorize_memory_access(caller_profile, row)`
+3. If caller is non-privileged, require `namespace` param and enforce `namespace == row.namespace` (defense in depth)
+4. `collection.delete(ids=[id])`
+5. Update SQLite status = "archived"
+
+If Chroma delete fails, entry remains searchable and SQLite stays unchanged (safe fallback).
+If SQLite archive update fails after Chroma delete, return partial-failure and mark for reconciliation.
+Returns: `{ id, archived: true }` on full success.
+
+Unauthorized access returns `{ error_code: "forbidden_scope", id, namespace, caller_id }`.
 
 **`review_candidates`** — Surface memories needing human review.
 
 | Param | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| namespace | string | no | | Filter by namespace |
+| namespace | string | no | | Optional scope hint resolved by Scope Resolution Contract |
 | limit | int | no | 20 | Max results |
 
 Returns entries where confidence < 0.7 OR has high-similarity pair (>= 0.85 with another committed entry).
@@ -278,49 +363,120 @@ Returns entries where confidence < 0.7 OR has high-similarity pair (>= 0.85 with
 
 Returns: `[{ id, content, reason: "low_confidence" | "high_similarity", confidence?, similar_entries?: [{ id, content, similarity }] }]`
 
+Read visibility: `status="committed"` only.
+Scope behavior: resolved by Scope Resolution Contract.
+
 ### Stats Tools
 
 **`get_stats`** — Memory statistics.
 
 | Param | Type | Required |
 |-------|------|----------|
-| namespace | string | no |
+| namespace | string | no | Optional scope hint resolved by Scope Resolution Contract |
 
 Returns: `{ total, by_type: {}, by_namespace: {}, recent_7d, recent_30d }`
+
+Includes consistency metrics:
+
+`drift = { sqlite_committed_missing_chroma, sqlite_archived_present_chroma, chroma_orphans, last_reconcile_at }`
+
+Stats visibility: counters are computed from `status="committed"` rows unless explicitly labeled as lifecycle/drift metrics.
+Scope behavior: resolved by Scope Resolution Contract.
 
 ## Write-Time Consolidation
 
 Runs on every `write_memory` call to prevent duplicate accumulation.
+
+### Concurrency Control
+
+Dedup write path is transactionally serialized at the SQLite layer for the target namespace.
+
+- Compute `idempotency_key = namespace + canonical_content_hash(content)` before write
+- Reserve idempotency key via staged insert with active-row uniqueness on `idempotency_key`
+- If unique conflict occurs, treat write as dedup SKIP and return existing active row id
+- This provides deterministic duplicate prevention under concurrent writes
+
+### Canonicalization
+
+Deterministic dedup uses canonicalized content before any embedding work.
+
+`canonical_content_hash(content)` is computed from normalized text with:
+
+- whitespace folding (collapse repeated spaces/newlines to single spaces)
+- case normalization (lowercase)
+- punctuation trimming at boundaries
+
+Implementation location: `utils/consolidation.py`.
 
 ### Algorithm
 
 **Important:** Chroma returns cosine **distance** (lower = more similar), not similarity. Convert: `similarity = 1 - distance`. All thresholds below are expressed as similarity values.
 
 ```
-1. Generate embedding for new content (sentence-transformers)
-2. Search Chroma for top-5 similar entries in target namespace + global
-   - Filter: status = 'committed', same namespace OR 'global'
+1. Stage 0 (deterministic): compute `canonical_content_hash(content)` and `idempotency_key = namespace + canonical_content_hash`
+2. Stage 0 (deterministic): open short SQLite write transaction and attempt staged row reservation with `idempotency_key`
+   - On unique conflict with active row (`staged|committed`): SKIP and return existing id
+3. Stage 1 (semantic): generate embedding for new content (sentence-transformers)
+4. Stage 1 (semantic): search Chroma for top-5 similar committed entries in target namespace + global
+   - Candidate IDs are prefetched from SQLite where `status="committed"` and scope is allowed
+   - Chroma query is restricted to candidate ID set
    - Convert Chroma distances to similarities: similarity = 1 - distance
-3. Check top result similarity:
-   - >= 0.92 (distance <= 0.08): SKIP — return { action: "skipped", similar_id, similarity }
-   - < 0.92 (distance > 0.08): ADD — proceed with staged commit
-4. No UPDATE or MERGE for MVP
+5. Stage 1 (semantic): check top result similarity:
+   - >= 0.92 (distance <= 0.08): SKIP semantic duplicate
+     - archive or drop newly reserved staged row
+     - return `{ action: "skipped", similar_id, similarity }`
+   - < 0.92 (distance > 0.08): ADD
+6. ADD path: write vector to Chroma, then transition staged SQLite row to committed
+7. No UPDATE or MERGE for MVP
 ```
 
 ### Design Rationale
 
 - **0.92 threshold** — Conservative. Only suppresses near-identical entries. Reduces false-positive merges.
+- **Deterministic-first precedence** — exact canonical matches are resolved before semantic search; exact dedup always wins over embedding similarity decisions.
 - **Top-5 search** — Small k keeps consolidation fast. Only top-1 similarity matters for SKIP decision, but returning top-5 provides context for `review_candidates`.
+- **SQL-prefilter for status** — lifecycle filtering (`committed` only) is enforced in SQLite source-of-truth before vector search, avoiding duplicated status metadata in Chroma.
 - **No MERGE** — MVP avoids the complexity of deciding which version to keep or how to merge. LLM-based consolidation (post-MVP) will handle UPDATE/DELETE.
 - **Namespace-scoped** — Dedup checks within the same namespace + global. A project-scoped fact can coexist with a similar global fact.
 
 ## Security
 
-- **Single-user, no auth** — No authentication or authorization layer
-- **Namespace isolation** — Enforced at query time via metadata filtering, not access control
+- **Single-user trusted-local model** — No multi-user auth stack; policy enforcement for trusted local clients
+- **Namespace isolation** — Enforced via caller profile policy + query-time filtering
 - **Private namespace** — Excluded from default search; requires explicit request
 - **No secrets** — Memory entries should not contain credentials or API keys (user responsibility, not system enforcement)
-- **Local-only** — No external network calls. Embeddings computed locally. No data leaves the machine.
+- **Local-only runtime** — No external network calls at runtime. Embeddings computed locally. No memory data leaves the machine.
+
+### Trust Model
+
+Caller identity is policy-validated using static client profiles from config.
+
+- `client_profiles` map keyed by client identity (e.g., `writer_id` / `client_id`)
+- Profile fields: `allowed_namespaces`, `can_cross_scope`, `can_access_private`
+- Default behavior is least-privilege: own namespace + global only
+- `namespace` requests are validated against caller profile before query/write execution
+- Omitting `namespace` is treated as cross-scope request and only allowed when `can_cross_scope=true`
+
+This is policy enforcement for trusted local callers, not cryptographic authentication.
+
+### Authorization Enforcement
+
+All authorization checks run in `MemoryStorage` (core), not in MCP routing glue.
+
+- `authorize_namespace_access(caller_profile, requested_namespace)`
+- `authorize_memory_access(caller_profile, memory_row)`
+
+Standard forbidden error contract:
+
+- `{ error_code: "forbidden_scope", id?, namespace, caller_id }`
+
+### Operational Constraints
+
+- Runtime network policy: zero outbound network calls while MCP server is running
+- Setup-time provisioning is allowed to install embedding model artifacts
+- Startup preflight must verify embedding model availability before serving tools
+- If model artifact is missing at startup, fail fast with deterministic remediation instructions
+- Optional setup config: `allow_model_download_during_setup` (default false in restricted environments)
 
 ## Capabilities
 
@@ -333,7 +489,7 @@ Runs on every `write_memory` call to prevent duplicate accumulation.
 ### MCP Configuration
 - Transport: stdio
 - Entry point: `python -m memory_core.access.mcp_server`
-- Config: `config/memory_config.yaml` (data paths, thresholds)
+- Config: `config/memory_config.yaml` (data paths, thresholds, model provisioning policy)
 
 ### Integration Points
 - ADF agents: call MCP tools at session-end per ADF discipline
@@ -344,8 +500,8 @@ Runs on every `write_memory` call to prevent duplicate accumulation.
 
 | # | Decision | Options Considered | Rationale |
 |---|----------|--------------------|-----------|
-| D1 | Caller-provided namespace | Caller param vs cwd-derived vs MCP metadata | Simplest. No magic. Matches KB pattern (callers specify context). cwd-derived is fragile in MCP stdio. |
-| D2 | Local embeddings (all-MiniLM-L6-v2) | all-MiniLM-L6-v2 vs Chroma default vs nomic-embed-text | 384 dims, ~80MB, fast, well-tested. Satisfies local-only constraint. Good quality-to-size ratio. |
+| D1 | Caller-provided namespace + client-profile policy enforcement | Caller param only vs cwd-derived vs MCP metadata + profile validation | Caller-param remains simple, but must be validated by profile policy. cwd-derived is fragile in MCP stdio. |
+| D2 | Local embeddings (all-MiniLM-L6-v2) | all-MiniLM-L6-v2 vs Chroma default vs nomic-embed-text | 384 dims, ~80MB, fast, well-tested. Setup-time provisioned and runtime-offline. Good quality-to-size ratio. |
 | D3 | Namespace-only scoping | Namespace only vs namespace + visibility vs merged scope field | Single-user — visibility adds complexity for zero benefit. Namespace (project/global/private) covers all MVP needs. |
 | D4 | Conservative dedup (0.92+) | 0.92 skip-only vs 0.85 with merge vs configurable | Conservative avoids false merges. Can tighten later. No merge logic reduces MVP complexity. |
 | D5 | No chunking | No chunking vs token-based chunks | Memories are atomic facts (short). One entry = one embedding. Unlike KB docs, no need to chunk. |
@@ -371,14 +527,14 @@ Post-MVP items from Brief (Out of Scope) + Design decisions:
 
 None remaining. All questions resolved during Intake & Clarification.
 
-Caller identity (the one question carried from Discover) resolved as D1: caller-provided namespace parameter.
+Caller identity (the one question carried from Discover) resolved as D1: caller-provided namespace with client-profile policy enforcement.
 
 ## Issue Log
 
 | # | Issue | Source | Severity | Status | Resolution |
 |---|-------|--------|----------|--------|------------|
 | 1 | Visibility dropped but Brief success criterion #2 and In Scope reference it — no acknowledgment | Ralph-Design | High | Resolved | Added Brief Deviations section explaining D3 simplification and how success criterion is still satisfied via namespace |
-| 2 | Cross-scope search impossible — namespace omitted returns global only, Krypton can't search all namespaces | Ralph-Design | High | Resolved | Changed default: namespace omitted now searches all except private. Added search resolution table. |
+| 2 | Cross-scope search impossible — namespace omitted returns global only, Krypton can't search all namespaces | Ralph-Design | High | Resolved | Changed default: namespace omitted supports cross-scope (except private) for policy-allowed callers. Added search resolution table. |
 | 3 | Consolidation simplified (ADD/SKIP only) vs Brief's ADD/UPDATE/SKIP + contradiction detection — no explanation | Ralph-Design | High | Resolved | Added to Brief Deviations section with rationale for D4 simplification |
 | 4 | `update_memory` dual-store flow unspecified — developer wouldn't know how to handle SQLite+Chroma update | Ralph-Design | High | Resolved | Added update flow specification: content change triggers re-embed+upsert, metadata-only updates skip embedding |
 | 5 | `review_candidates` similarity data not captured — consolidation doesn't persist 0.85-0.92 similarity info | Ralph-Design | High | Resolved | Specified on-demand computation at query time — O(n) Chroma queries, acceptable at MVP scale |
@@ -401,7 +557,7 @@ Persistent memory service for the personal agent ecosystem. 3-layer architecture
 | Decision | Implication for Develop |
 |----------|----------------------|
 | D1: Caller-provided namespace | Every tool that takes `namespace` uses it for scoping — no magic inference needed |
-| D2: Local embeddings (all-MiniLM-L6-v2) | Add `sentence-transformers` to deps. Model downloads on first use (~80MB). No API keys needed. |
+| D2: Local embeddings (all-MiniLM-L6-v2) | Add `sentence-transformers` to deps. Provision model during setup (~80MB), then enforce runtime-offline behavior. No API keys needed. |
 | D3: Namespace-only (no visibility) | Single scoping dimension simplifies all query logic. Brief says "visibility" but namespace covers it. |
 | D4: Conservative dedup (0.92 SKIP only) | No merge/update logic needed. Consolidation is a simple threshold check. |
 | D5: No chunking | One entry = one embedding. No chunking utils needed (unlike KB). |
@@ -413,7 +569,7 @@ Persistent memory service for the personal agent ecosystem. 3-layer architecture
 **Runtime:** Python 3.11+, uv, sentence-transformers, chromadb >= 0.4.0, mcp >= 1.0.0, pydantic >= 2.0, pyyaml
 **Dev:** pytest, pytest-asyncio, pytest-cov, ruff, mypy
 **System:** SQLite3 (bundled with Python)
-**Config:** `config/memory_config.yaml` for data paths, thresholds
+**Config:** `config/memory_config.yaml` for data paths, thresholds, model provisioning policy
 
 ### Open Questions for Develop
 
@@ -427,7 +583,7 @@ From Brief v0.6, mapped to design:
 - [ ] Agents can write memories with scope, type, and writer metadata → `write_memory` tool with namespace, memory_type, writer_id params
 - [ ] Agents can search memories by semantic query with scope filtering → `search_memories` with namespace + Chroma vector search
 - [ ] Project-scoped agents see only project + global memories (isolation) → search resolution: `namespace="X"` returns X + global
-- [ ] Cross-scope queries work for authorized consumers (e.g., Krypton) → namespace omitted returns all except private
+- [ ] Cross-scope queries work for policy-allowed trusted consumers (e.g., Krypton) → namespace omitted allowed only when `can_cross_scope=true`
 - [ ] Manual entries can be added via MCP tool → `write_memory` with writer_type="user"
 - [ ] Memory entries persist across sessions → SQLite + Chroma PersistentClient in `data/`
 - [ ] Write-time consolidation prevents duplicates — same fact twice ≠ two entries → 0.92 similarity SKIP
@@ -446,27 +602,39 @@ From Brief v0.6, mapped to design:
 1. `pyproject.toml` + project scaffold (package layout, config)
 2. `models.py` — Pydantic models for MemoryEntry, config
 3. `storage/schema.sql` + `storage/db.py` — SQLite layer (create table, CRUD, WAL mode)
-4. `utils/embeddings.py` — sentence-transformers wrapper (embed single text, embed batch)
-5. `storage/vector_store.py` — Chroma wrapper (add, search, update, delete)
-6. `storage/api.py` — MemoryStorage class (orchestrates db + vector_store + embeddings)
-7. `utils/consolidation.py` — dedup logic (called by MemoryStorage.write)
-8. `access/mcp_server.py` — MCP server with 9 tool definitions
-9. Integration tests — write → search → dedup → archive flows
+4. Embedding model provisioning + startup preflight checks (fail-fast if model missing)
+5. `utils/embeddings.py` — sentence-transformers wrapper (embed single text, embed batch)
+6. `storage/vector_store.py` — Chroma wrapper (add, search, update, delete)
+7. `storage/api.py` — MemoryStorage class (orchestrates db + vector_store + embeddings)
+8. Reconciliation path in core (`reconcile_dual_store`) + drift metrics plumbing
+9. Failed lifecycle maintenance APIs in core (`list_failed_memories`, `retry_failed_memory`, `archive_failed_memory`)
+10. `utils/consolidation.py` — dedup logic (called by MemoryStorage.write)
+11. `access/mcp_server.py` — MCP server with core 9 tools plus maintenance/health endpoints
+12. Integration tests — write → search → dedup → archive → reconcile flows
 
 **Edge cases to test:**
 - Write same content twice → second should SKIP (dedup)
 - Search with namespace → only returns that namespace + global
-- Search without namespace → returns all except private
+- Search without namespace (policy-allowed callers) → returns all except private
 - Archive → entry no longer in search results
 - Update content → re-embedding + Chroma upsert
 - Update metadata only → no re-embedding
 - Chroma distance → similarity conversion correctness
 - Empty database → tools return empty results gracefully
+- Startup with missing embedding model → deterministic fail-fast error
+- Simulated SQLite failure after Chroma success → drift detected + reconcile restores invariants
+- Chroma orphan IDs present → reconcile removes orphans
+- Failed/staged rows never appear in read tools or primary stats
+- `retry_failed_memory` transitions failed row to committed and restores retrievability
+- Two concurrent identical writes in same namespace → one committed row, one SKIP via idempotency conflict
+- Same fact with case/whitespace/punctuation variation dedups via deterministic canonical stage before semantic search
 
 **Integration test strategy:**
 - Use ephemeral Chroma client + temp SQLite for test isolation (same pattern as KB)
 - Test each MCP tool end-to-end through MemoryStorage
 - Test consolidation with known-similar and known-different content
+- Add deterministic drift-injection tests for update/archive partial failure paths
+- Add concurrent writer stress test (same namespace/same content) to verify idempotency key conflict path
 
 ### Reference Documents
 
@@ -486,7 +654,7 @@ From Brief v0.6, mapped to design:
 **Cycle 1 Issues Found:** 0 Critical, 5 High, 0 Low
 **Actions Taken:**
 - Brief Deviations section added — documented D3 (visibility→namespace) and D4 (consolidation simplification) with rationale
-- Cross-scope search fixed — namespace omitted now searches all except private, enabling Krypton access
+- Cross-scope search fixed — namespace omitted now supports cross-scope (except private) for policy-allowed callers, enabling Krypton access
 - Update flow specified — dual-store update behavior for content vs metadata changes
 - review_candidates implementation clarified — on-demand O(n) computation at query time
 
