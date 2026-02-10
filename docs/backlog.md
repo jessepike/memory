@@ -30,3 +30,4 @@ updated: "2026-02-10"
 | DEV-14 | P1 | done | agent | Add MCP-level integration tests for 9-tool surface and error contracts | Added MCP integration flow + error-contract tests for tool coverage and forbidden-scope cases; full suite and smoke pass |
 | DEV-15 | P2 | done | agent | Add packaging/dev setup commands to README and verify clean bootstrap path | README now contains concrete bootstrap/dev commands; verified in fresh venv with editable install, full tests, and smoke pass |
 | DEV-16 | P2 | done | agent | Review and align docs with implemented behavior and outstanding gaps | Aligned design/brief wording to implementation reality (tool surface + caller identity resolution) and synchronized status/backlog state |
+| DEV-17 | P2 | done | agent | Add practical usage documentation for operators and agents | Added `docs/usage.md` with tool-by-tool examples, scope/error contracts, workflows, and verification commands; linked from README |

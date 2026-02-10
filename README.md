@@ -41,3 +41,7 @@ python -m memory_core.access.mcp_server
 - Runtime data is stored under `data/` (gitignored).
 - Default runtime configuration lives in `config/memory_config.yaml`.
 - If runtime is configured with `enforce_offline: true`, ensure embedding model artifacts are already provisioned locally.
+
+## Usage Guide
+
+- See `docs/usage.md` for practical tool-by-tool usage examples and common workflows.

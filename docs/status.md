@@ -9,7 +9,7 @@ updated: "2026-02-10"
 ## Current State
 
 - **Phase:** Develop — In Progress
-- **Focus:** Documentation consistency pass complete across design/brief/status/backlog. Implementation and docs are now aligned for current scope.
+- **Focus:** Usage documentation is now in place with practical examples. Develop stage deliverables are implemented and documented.
 
 ## Next Steps
 
@@ -33,6 +33,7 @@ updated: "2026-02-10"
 - [x] Develop Step 14 — MCP-level integration tests for tool surface + error contracts
 - [x] Develop Step 15 — Packaging/dev setup command docs + bootstrap verification
 - [x] Develop Step 16 — Final docs consistency alignment (design/brief/status/backlog)
+- [x] Develop Step 17 — Practical usage guide (`docs/usage.md`) with tool-by-tool examples
 
 ## Pending Decisions
 
@@ -106,3 +107,4 @@ updated: "2026-02-10"
 | 2026-02-10 | Completed DEV-14 MCP integration tests: added end-to-end tool flow coverage and explicit forbidden-scope/namespace mismatch contract checks at the MCP layer. Updated test payload parsing for FastMCP response shape variants. Full test suite and smoke checklist passing. |
 | 2026-02-10 | Completed DEV-15 packaging/bootstrap verification: updated README with concrete setup/dev/test/smoke/server commands, then validated in fresh `/tmp` venv using editable install (`pip install -e .[dev]`), full pytest pass, and smoke success (`tool_count=14`, `success=true`). |
 | 2026-02-10 | Completed DEV-16 documentation alignment: reconciled design wording with implemented MCP surface (core + maintenance tools), updated discover brief to mark caller-identity enforcement resolved via Design D1, and synchronized backlog/status completion state. |
+| 2026-02-10 | Completed DEV-17 usage documentation: added `docs/usage.md` covering quick start, scoping behavior, forbidden-scope contract, tool-by-tool request examples, maintenance flows, and verification commands; linked from README. |
