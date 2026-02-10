@@ -1,7 +1,7 @@
 ---
 type: "brief"
 project: "Memory Layer"
-version: "0.2"
+version: "0.3"
 status: "draft"
 review_cycle: 0
 created: "2026-02-10"
@@ -80,14 +80,16 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 
 ## Open Questions
 
-- [ ] **Curation workflow** — How should memories be reviewed, promoted, rejected? MCP tools? CLI? Status flags only? What does the ACK blocker teach us about what's actually needed?
-- [ ] **Single store vs partitioned** — One memory store with scoping metadata, or separate stores per scope/domain? Performance, simplicity, and cross-scope query tradeoffs.
-- [ ] **MCP tool surface** — How many tools, what granularity? Mirror KB's pattern or start smaller?
-- [ ] **Memory entry format** — Short facts (composable) vs. longer summaries (richer context) vs. both?
-- [ ] **Capture mechanism** — Hooks-based (ACK pattern) vs. agent-initiated vs. hybrid? What triggers capture?
-- [ ] **Write-back paths** — Which paths for MVP? Hot (mid-conversation), warm (session-end), cold (batch)?
-- [ ] **Cross-channel access architecture** — How does a non-MCP consumer (future personal assistant, dashboard) access memories?
-- [ ] **State-based vs retrieval-based** — Pure vector retrieval, or hybrid with entity/belief state tracking?
+> All 8 questions researched and resolved for MVP. Full analysis: `docs/adf/open-questions-research.md`
+
+- [x] **Curation workflow** — Write-time consolidation (Mem0's ADD/UPDATE/DELETE/NOOP pattern). Review candidates surfaced via MCP tool. No TUI/CLI needed — MCP tools sufficient. ACK lesson: staging state required from day one, but curation as a separate phase was over-engineered.
+- [x] **Single store vs partitioned** — Single store with namespace metadata. SQLite + Chroma (KB pattern). Scoping enforced at query time via metadata filtering. Physical partitioning adds complexity for zero benefit at personal scale.
+- [x] **MCP tool surface** — ~8-10 tools in 4 categories: write (write_memory, update_memory), read (search_memories, get_memory, get_recent, get_session_context), manage (archive_memory, review_candidates), stats (get_stats). Modeled on KB's pattern.
+- [x] **Memory entry format** — Atomic facts as primary format (one fact per entry, independently searchable). Session summaries as separate `progress` type for session-end write-back. ACK's 4-layer format (title/subtitle/facts/narrative) was over-coupled — atomic facts are more composable.
+- [x] **Capture mechanism** — MCP tools (primary, agent-initiated). Session-end hook (secondary, post-MVP). ACK's PostToolUse hook captured too much noise. Explicit tool calls produce higher quality memories.
+- [x] **Write-back paths** — Two paths for MVP: hot (explicit `write_memory` tool call) + warm (session-end extraction). Cold path (background consolidation, decay) deferred until volume demands.
+- [x] **Cross-channel access architecture** — MCP-only for MVP. Core as Python library with clean API; MCP server is one interface, REST adapter is future second interface. Neither contains business logic.
+- [x] **State-based vs retrieval-based** — Retrieval-first for MVP. All memories stored as atomic facts with vector embeddings. State profiles (entity-level summaries) added later as a layer on top when entity coherence is needed.
 
 ## Issue Log
 
@@ -101,3 +103,4 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 |---------|------|---------|
 | 0.1 | 2026-02-10 | Initial draft from research synthesis |
 | 0.2 | 2026-02-10 | Corrected framing: ecosystem infra, not Krypton-specific. Added prior art, expanded open questions from KB + ACK research. |
+| 0.3 | 2026-02-10 | All 8 open questions researched and resolved for MVP. Deep-dive across ACK prior art, 16 KB entries, and landscape research (Mem0, Letta, LangMem, ChatGPT, AWS AgentCore). |
