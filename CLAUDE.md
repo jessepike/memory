@@ -22,12 +22,14 @@ Discover
 | docs/intent.md | Always | North Star |
 | docs/status.md | Always | Session state — review at start, update at end |
 | docs/discover-brief.md | Discover, Design | Project contract |
-| memory-layer-research.md | Reference | Research synthesis informing design |
+| docs/adf/memory-layer-research.md | Reference | Landscape research synthesis |
 
 ## Architecture Reference
 
+- Ecosystem infrastructure — not tied to any single project or agent
 - Follows KB project patterns: SQLite + Chroma + MCP server
 - KB project location: `~/code/_shared/knowledge-base/`
+- Prior research (ACK): `~/code/sandbox/ai-dev/ack/`
 - Python, local-first, single-user
 
 ## Stack
