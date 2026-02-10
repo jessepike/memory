@@ -9,7 +9,7 @@ updated: "2026-02-10"
 ## Current State
 
 - **Phase:** Develop — In Progress
-- **Focus:** MCP smoke flow validated end-to-end with real dependencies. Next: harden scope authorization behavior for non-privileged update/archive flows.
+- **Focus:** Scope authorization hardening completed for ID-based tools. Next: expand MCP integration tests across tool surface and error contracts.
 
 ## Next Steps
 
@@ -29,7 +29,8 @@ updated: "2026-02-10"
 - [x] Develop Step 10 — Consolidation utility hardening + edge-case tests
 - [x] Develop Step 11 — MCP server tool definitions + dispatch integration
 - [x] Develop Step 12 — MCP integration polish + end-to-end smoke checklist
-- [ ] Develop Step 13 — Scope-authorization hardening for update/archive defense-in-depth
+- [x] Develop Step 13 — Scope-authorization hardening for update/archive defense-in-depth
+- [ ] Develop Step 14 — MCP-level integration tests for tool surface + error contracts
 
 ## Pending Decisions
 
@@ -99,3 +100,4 @@ updated: "2026-02-10"
 | 2026-02-10 | Develop Step 10/11 implemented. Hardened consolidation normalization/hash helpers with edge-case tests. Added MCP server entrypoint with tool dispatch wiring for write/read/manage/stats and maintenance APIs backed by `MemoryStorage`. |
 | 2026-02-10 | Added required operational governance artifacts. Created `AGENTS.md` and `docs/backlog.md`, and updated `CLAUDE.md` to require backlog-first task execution, status updates, and regular commits for every tested slice. |
 | 2026-02-10 | Completed DEV-12 MCP integration polish: added scope-error serialization handling in MCP tool wrappers, fixed stats drift type mismatch, added MCP access regression tests, and added `scripts/mcp_smoke.py` (real dependency smoke checklist). Smoke and test suite passing. |
+| 2026-02-10 | Completed DEV-13 scope hardening: non-privileged callers now must provide matching namespace for ID-based `update_memory` and `archive_memory`. Added regression tests for missing/mismatched namespace guards. Full test suite and smoke checklist passing. |

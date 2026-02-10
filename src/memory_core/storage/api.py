@@ -227,6 +227,12 @@ class MemoryStorage:
         """Update memory content and/or metadata with Chroma-first ordering."""
         req = request if isinstance(request, UpdateMemoryRequest) else UpdateMemoryRequest.model_validate(request)
         row = self.get_memory(req.id, caller_id=caller_id)
+        self._enforce_id_tool_namespace_guard(
+            caller_id=caller_id,
+            row_namespace=row.namespace,
+            requested_namespace=req.namespace,
+            memory_id=row.id,
+        )
 
         updates = req.model_dump(exclude_none=True)
         updates.pop("id", None)
@@ -252,9 +258,21 @@ class MemoryStorage:
         self.db.update_memory(row.id, **updates)
         return {"id": row.id, "updated_fields": changed_fields}
 
-    def archive_memory(self, memory_id: UUID | str, *, caller_id: str = "unknown") -> dict[str, Any]:
+    def archive_memory(
+        self,
+        memory_id: UUID | str,
+        *,
+        caller_id: str = "unknown",
+        namespace: str | None = None,
+    ) -> dict[str, Any]:
         """Archive a committed memory with Chroma-first mutation order."""
         row = self.get_memory(memory_id, caller_id=caller_id)
+        self._enforce_id_tool_namespace_guard(
+            caller_id=caller_id,
+            row_namespace=row.namespace,
+            requested_namespace=namespace,
+            memory_id=row.id,
+        )
         if row.status is not MemoryStatus.COMMITTED:
             raise ValueError(f"Only committed rows can be archived (got: {row.status.value})")
         self.vector_store.delete_memory(row.id)
@@ -514,6 +532,23 @@ class MemoryStorage:
                 caller_id=caller_id,
             )
         )
+
+    def _enforce_id_tool_namespace_guard(
+        self,
+        *,
+        caller_id: str,
+        row_namespace: str,
+        requested_namespace: str | None,
+        memory_id: UUID,
+    ) -> None:
+        """Require namespace-match on ID tools for non-privileged callers."""
+        profile = self._get_client_profile(caller_id)
+        if profile.can_cross_scope:
+            return
+        if requested_namespace is None:
+            raise self._forbidden(caller_id=caller_id, namespace=row_namespace, memory_id=memory_id)
+        if requested_namespace != row_namespace:
+            raise self._forbidden(caller_id=caller_id, namespace=requested_namespace, memory_id=memory_id)
 
     def _drift_counts(self) -> dict[str, Any]:
         committed_ids = set(self.db.list_ids_by_statuses([MemoryStatus.COMMITTED]))

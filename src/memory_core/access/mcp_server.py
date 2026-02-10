@@ -146,8 +146,8 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
         return _run_tool(memory_storage.update_memory, filtered, caller_id=caller_id)
 
     @app.tool()
-    def archive_memory(id: str, caller_id: str = "unknown") -> Any:
-        return _run_tool(memory_storage.archive_memory, id, caller_id=caller_id)
+    def archive_memory(id: str, caller_id: str = "unknown", namespace: str | None = None) -> Any:
+        return _run_tool(memory_storage.archive_memory, id, caller_id=caller_id, namespace=namespace)
 
     @app.tool()
     def review_candidates(

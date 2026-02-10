@@ -106,7 +106,7 @@ async def run_smoke() -> dict[str, Any]:
         archive = _payload(
             await app.call_tool(
                 "archive_memory",
-                {"id": write_one["id"], "caller_id": "demo-agent"},
+                {"id": write_one["id"], "caller_id": "demo-agent", "namespace": "demo"},
             )
         )
         stats_after = _payload(await app.call_tool("get_stats", {"caller_id": "krypton"}))

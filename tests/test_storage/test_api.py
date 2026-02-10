@@ -139,7 +139,7 @@ def test_update_content_rewrites_vector_and_sqlite(tmp_path) -> None:
     write = storage.write_memory({"content": "Old content", "namespace": "alpha"})
 
     result = storage.update_memory(
-        UpdateMemoryRequest(id=write.id, content="New content", confidence=0.8),
+        UpdateMemoryRequest(id=write.id, content="New content", confidence=0.8, namespace="alpha"),
         caller_id="alpha-agent",
     )
     refreshed = storage.get_memory(write.id, caller_id="alpha-agent")
@@ -153,10 +153,36 @@ def test_archive_memory_removes_vector_and_marks_archived(tmp_path) -> None:
     storage = _storage(tmp_path)
     write = storage.write_memory({"content": "Archive me", "namespace": "alpha"})
 
-    response = storage.archive_memory(write.id, caller_id="alpha-agent")
+    response = storage.archive_memory(write.id, caller_id="alpha-agent", namespace="alpha")
     row = storage.db.get_memory(write.id)
     assert response["archived"] is True
     assert row is not None and row.status is MemoryStatus.ARCHIVED
+
+
+def test_non_privileged_update_requires_matching_namespace(tmp_path) -> None:
+    storage = _storage(tmp_path)
+    write = storage.write_memory({"content": "Needs namespace guard", "namespace": "alpha"})
+
+    with pytest.raises(ScopeForbidden):
+        storage.update_memory(
+            UpdateMemoryRequest(id=write.id, content="x"),
+            caller_id="alpha-agent",
+        )
+    with pytest.raises(ScopeForbidden):
+        storage.update_memory(
+            UpdateMemoryRequest(id=write.id, content="x", namespace="beta"),
+            caller_id="alpha-agent",
+        )
+
+
+def test_non_privileged_archive_requires_matching_namespace(tmp_path) -> None:
+    storage = _storage(tmp_path)
+    write = storage.write_memory({"content": "Needs archive namespace guard", "namespace": "alpha"})
+
+    with pytest.raises(ScopeForbidden):
+        storage.archive_memory(write.id, caller_id="alpha-agent")
+    with pytest.raises(ScopeForbidden):
+        storage.archive_memory(write.id, caller_id="alpha-agent", namespace="beta")
 
 
 def test_reconcile_repairs_missing_committed_vector(tmp_path) -> None:

@@ -9,13 +9,12 @@ updated: "2026-02-10"
 
 | id | priority | status | owner | description | done_when |
 |----|----------|--------|-------|-------------|-----------|
-| DEV-13 | P1 | in_progress | agent | Harden scope authorization rules for update/archive defense-in-depth namespace checks | Non-privileged caller path covered by tests and enforced in API |
+| DEV-14 | P1 | in_progress | agent | Add MCP-level integration tests for 9-tool surface and error contracts | Integration suite verifies tool payloads, scope errors, and lifecycle flows |
 
 ## Todo
 
 | id | priority | status | owner | description | done_when |
 |----|----------|--------|-------|-------------|-----------|
-| DEV-14 | P1 | todo | agent | Add MCP-level integration tests for 9-tool surface and error contracts | Integration suite verifies tool payloads, scope errors, and lifecycle flows |
 | DEV-15 | P2 | todo | agent | Add packaging/dev setup commands to README and verify clean bootstrap path | Fresh checkout setup is documented and reproducible |
 | DEV-16 | P2 | todo | agent | Review and align docs with implemented behavior and outstanding gaps | design/brief/status/backlog consistency verified and updated |
 
@@ -30,3 +29,4 @@ updated: "2026-02-10"
 | DEV-05 | P1 | done | agent | Implement Chroma wrapper and orchestration core | Vector store + MemoryStorage write/read/manage/stats/reconcile APIs implemented |
 | DEV-06 | P1 | done | agent | Wire MCP tool dispatch | MCP server entrypoint and tool wiring implemented |
 | DEV-12 | P1 | done | agent | MCP integration polish and end-to-end smoke testing | `scripts/mcp_smoke.py` passes against real dependencies; MCP error serialization and regression tests added |
+| DEV-13 | P1 | done | agent | Harden scope authorization rules for update/archive defense-in-depth namespace checks | Non-privileged update/archive now require matching namespace; covered by regression tests and passing smoke |
