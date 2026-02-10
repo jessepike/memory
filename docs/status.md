@@ -8,23 +8,50 @@ updated: "2026-02-10"
 
 ## Current State
 
-- **Phase:** Design — Technical Design (draft complete)
-- **Focus:** design.md v0.1 drafted, ready for Review Loop
+- **Phase:** Design — Complete (pending human sign-off)
+- **Focus:** design.md v1.0 finalized, Develop Handoff complete
 
 ## Next Steps
 
 - [x] Intake & Clarification — 7 decisions resolved (caller ID, embeddings, scope model, dedup, package naming, private namespace, consolidation approach)
 - [x] Technical Design — design.md v0.1 drafted (architecture, 9 MCP tools, data model, consolidation algorithm, decision log)
-- [ ] Review Loop — internal (Ralph Loop) + external review of design.md
-- [ ] Finalization — exit criteria, handoff prep, human sign-off
+- [x] Review Loop — Phase 1 internal (2 cycles, 5 High resolved) + Phase 2 external (Gemini + GPT, 3 High resolved)
+- [x] Finalization — Develop Handoff complete, exit criteria verified
+- [ ] Human sign-off → transition to Develop
 
 ## Pending Decisions
 
-- None (all resolved during Intake)
+- None
 
 ## Blockers
 
 - None
+
+## Design Stage Handoff
+
+### What Was Produced
+
+- **design.md v1.0** — Full technical specification: 3-layer architecture (MCP → core → dual store), 9 MCP tools, data model, write-time consolidation (0.92 threshold), 7 design decisions, Develop Handoff with build order and test strategy
+- **7 design decisions** — Caller-provided namespace, local embeddings (all-MiniLM-L6-v2), namespace-only scoping, conservative dedup, no chunking, staged commit, Chroma-first ordering
+- **8 review issues resolved** — 5 from internal (brief deviations, cross-scope search, update flow, review_candidates), 3 from external (Chroma distance semantics, metadata API, dual-store ordering)
+
+### Success Criteria Status
+
+- 10 testable criteria from Brief, all addressable by design
+- Each criterion mapped to specific implementation in Develop Handoff
+- No deferred criteria
+
+### Known Limitations
+
+- 2 Brief deviations documented: visibility→namespace simplification (D3), consolidation simplified to ADD/SKIP only (D4)
+- Kimi model timed out in both Discover and Design external reviews (2/3 models — sufficient coverage)
+
+### Read Order for Develop Stage
+
+1. `docs/intent.md` — North Star
+2. `docs/discover-brief.md` — Full project contract
+3. `docs/design.md` — Technical spec (start with Develop Handoff section)
+4. `docs/status.md` — This file
 
 ## Discover Stage Handoff
 
@@ -40,22 +67,6 @@ updated: "2026-02-10"
 - `docs/_archive/2026-02-10-memory-systems-deep-dive.md` — Deep-dive across 7 memory systems
 - `docs/_archive/2026-02-10-open-questions-research.md` — Analysis resolving all 8 open questions
 
-### Success Criteria Status
-
-- 10 testable criteria defined in brief (all carry forward to Design/Develop)
-- No deferred criteria
-
-### Known Limitations
-
-- 1 open question for Design: caller identity mechanism for MCP scope enforcement
-- Kimi model timed out during external review (2/3 models responded — sufficient coverage)
-
-### Read Order for Design Stage
-
-1. `docs/intent.md` — North Star
-2. `docs/discover-brief.md` — Primary input (fully consumed)
-3. `docs/status.md` — This file (context + handoff)
-
 ## Session Log
 
 | Date | Summary |
@@ -67,3 +78,5 @@ updated: "2026-02-10"
 | 2026-02-10 | Phase 2 external review complete. Gemini + GPT reviewed (Kimi timed out). 6 issues raised, 2 accepted: embedding locality constraint added, caller identity gap flagged for Design. 4 rejected as Design-stage concerns. Brief v0.6. Ready for Discover-to-Design transition. |
 | 2026-02-10 | Discover stage complete. Archived research artifacts. Transitioned to Design stage. |
 | 2026-02-10 | Design Intake & Clarification complete. Resolved 7 decisions: caller-provided namespace, local embeddings (all-MiniLM-L6-v2), namespace-only scoping (dropped visibility), 0.92 dedup threshold, memory_core package naming, private=excluded-by-default, no-merge consolidation. Analyzed KB project architecture for pattern alignment. Drafted design.md v0.1 with full technical spec: architecture, 9 MCP tools, data model, write-time consolidation, decision log. Ready for Review Loop. |
+| 2026-02-10 | Design Review Loop complete. Phase 1 internal (2 cycles): 5 High resolved (brief deviations, cross-scope search, update flow, review_candidates, consolidation). Phase 2 external (Gemini + GPT): 3 High accepted (Chroma distance semantics, metadata update API, dual-store ordering), 4 rejected. design.md v0.3. |
+| 2026-02-10 | Design Finalization complete. Develop Handoff section written (summary, key decisions, capabilities, success criteria mapping, build order, edge cases, test strategy). Exit criteria verified. design.md v1.0. Pending human sign-off. |

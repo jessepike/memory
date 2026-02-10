@@ -10,7 +10,8 @@ build/
 .venv/
 venv/
 
-# Storage
+# Storage / Runtime data
+data/
 *.db
 *.sqlite
 chroma_data/

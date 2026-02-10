@@ -1,8 +1,8 @@
 ---
 type: "design"
 project: "Memory Layer"
-version: "0.3"
-status: "external-review-complete"
+version: "1.0"
+status: "complete"
 created: "2026-02-10"
 updated: "2026-02-10"
 brief_ref: "./discover-brief.md"
@@ -390,9 +390,92 @@ Caller identity (the one question carried from Discover) resolved as D1: caller-
 
 ## Develop Handoff
 
-> Populated after review. Summarizes design decisions, capabilities, and implementation guidance for the Develop stage.
+### Design Summary
 
-*Section will be completed during Finalization phase.*
+Persistent memory service for the personal agent ecosystem. 3-layer architecture: MCP server (stdio, thin dispatch) → MemoryStorage core library (all business logic) → SQLite + Chroma dual store. Local-only embeddings via sentence-transformers. 9 MCP tools across write/read/manage/stats categories. Write-time consolidation with 0.92 similarity threshold (ADD/SKIP only).
+
+**Type:** App / personal / mvp / standalone
+
+### Key Design Decisions
+
+| Decision | Implication for Develop |
+|----------|----------------------|
+| D1: Caller-provided namespace | Every tool that takes `namespace` uses it for scoping — no magic inference needed |
+| D2: Local embeddings (all-MiniLM-L6-v2) | Add `sentence-transformers` to deps. Model downloads on first use (~80MB). No API keys needed. |
+| D3: Namespace-only (no visibility) | Single scoping dimension simplifies all query logic. Brief says "visibility" but namespace covers it. |
+| D4: Conservative dedup (0.92 SKIP only) | No merge/update logic needed. Consolidation is a simple threshold check. |
+| D5: No chunking | One entry = one embedding. No chunking utils needed (unlike KB). |
+| D6: Staged commit | Follow KB's pattern exactly: staged → embed → Chroma write → committed. |
+| D7: Chroma-first ordering | For update/archive: always mutate Chroma before SQLite to prevent dangerous divergence states. |
+
+### Capabilities Needed
+
+**Runtime:** Python 3.11+, uv, sentence-transformers, chromadb >= 0.4.0, mcp >= 1.0.0, pydantic >= 2.0, pyyaml
+**Dev:** pytest, pytest-asyncio, pytest-cov, ruff, mypy
+**System:** SQLite3 (bundled with Python)
+**Config:** `config/memory_config.yaml` for data paths, thresholds
+
+### Open Questions for Develop
+
+None. All questions resolved during Design Intake & Clarification.
+
+### Success Criteria (Verify During Implementation)
+
+From Brief v0.6, mapped to design:
+
+- [ ] MCP server runs and is connectable from Claude Code → `python -m memory_core.access.mcp_server` via stdio
+- [ ] Agents can write memories with scope, type, and writer metadata → `write_memory` tool with namespace, memory_type, writer_id params
+- [ ] Agents can search memories by semantic query with scope filtering → `search_memories` with namespace + Chroma vector search
+- [ ] Project-scoped agents see only project + global memories (isolation) → search resolution: `namespace="X"` returns X + global
+- [ ] Cross-scope queries work for authorized consumers (e.g., Krypton) → namespace omitted returns all except private
+- [ ] Manual entries can be added via MCP tool → `write_memory` with writer_type="user"
+- [ ] Memory entries persist across sessions → SQLite + Chroma PersistentClient in `data/`
+- [ ] Write-time consolidation prevents duplicates — same fact twice ≠ two entries → 0.92 similarity SKIP
+- [ ] `review_candidates` returns low-confidence or high-similarity pairs → on-demand O(n) computation
+- [ ] Core business logic in Python library, not MCP handler → `MemoryStorage` class, MCP dispatches only
+
+### What Was Validated
+
+- **Internal review** (2 cycles): Brief alignment verified, all success criteria addressable, cross-scope search fixed, dual-store flows specified, review_candidates implementation clarified
+- **External review** (Gemini + GPT): Architecture soundness confirmed. 3 implementation-critical issues caught and fixed (Chroma distance semantics, API calls for metadata updates, Chroma-first ordering). No architectural weaknesses identified.
+- **Core design elements are solid:** 3-layer architecture, dual-store with staged commits, namespace scoping model, consolidation algorithm, 9-tool MCP surface
+
+### Implementation Guidance
+
+**Recommended build order:**
+1. `pyproject.toml` + project scaffold (package layout, config)
+2. `models.py` — Pydantic models for MemoryEntry, config
+3. `storage/schema.sql` + `storage/db.py` — SQLite layer (create table, CRUD, WAL mode)
+4. `utils/embeddings.py` — sentence-transformers wrapper (embed single text, embed batch)
+5. `storage/vector_store.py` — Chroma wrapper (add, search, update, delete)
+6. `storage/api.py` — MemoryStorage class (orchestrates db + vector_store + embeddings)
+7. `utils/consolidation.py` — dedup logic (called by MemoryStorage.write)
+8. `access/mcp_server.py` — MCP server with 9 tool definitions
+9. Integration tests — write → search → dedup → archive flows
+
+**Edge cases to test:**
+- Write same content twice → second should SKIP (dedup)
+- Search with namespace → only returns that namespace + global
+- Search without namespace → returns all except private
+- Archive → entry no longer in search results
+- Update content → re-embedding + Chroma upsert
+- Update metadata only → no re-embedding
+- Chroma distance → similarity conversion correctness
+- Empty database → tools return empty results gracefully
+
+**Integration test strategy:**
+- Use ephemeral Chroma client + temp SQLite for test isolation (same pattern as KB)
+- Test each MCP tool end-to-end through MemoryStorage
+- Test consolidation with known-similar and known-different content
+
+### Reference Documents
+
+| Doc | Purpose | Read order |
+|-----|---------|------------|
+| `docs/intent.md` | North Star | 1 |
+| `docs/discover-brief.md` | Full project contract | 2 |
+| `docs/design.md` | This file — technical spec | 3 |
+| `docs/status.md` | Session state | Always |
 
 ## Review Log
 
@@ -438,3 +521,4 @@ Caller identity (the one question carried from Discover) resolved as D1: caller-
 | 0.1 | 2026-02-10 | Initial draft from Intake & Clarification decisions. Full technical spec. |
 | 0.2 | 2026-02-10 | Internal review cycle 1: 5 High issues found and resolved. Added Brief Deviations section, fixed cross-scope search, specified update flow, clarified review_candidates implementation. |
 | 0.3 | 2026-02-10 | External review (Phase 2): 2/3 models responded. 3 High issues accepted (Chroma distance semantics, metadata update API, dual-store ordering). 4 rejected. Ready for finalization. |
+| 1.0 | 2026-02-10 | Finalization: Develop Handoff completed (summary, decisions, capabilities, success criteria, build order, test strategy). Exit criteria verified. Design stage complete. |
