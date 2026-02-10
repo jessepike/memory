@@ -1,6 +1,6 @@
 ---
 project: "Memory Layer"
-stage: "Discover"
+stage: "Design"
 updated: "2026-02-10"
 ---
 
@@ -8,24 +8,53 @@ updated: "2026-02-10"
 
 ## Current State
 
-- **Phase:** External review complete, ready for Discover-to-Design transition
-- **Focus:** Brief v0.6 finalized — both review phases complete
+- **Phase:** Design — Intake & Clarification
+- **Focus:** Transform validated brief into technical specification
 
 ## Next Steps
 
-- [x] Deep-dive research: curation workflow patterns, single vs partitioned store, capture mechanisms, state-based vs retrieval-based
-- [x] Resolve enough open questions for solid brief
-- [x] Internal review (Ralph Loop) of discover-brief — 2 cycles, 5 issues found and resolved (v0.3 -> v0.5)
-- [x] External review (Phase 2) — 2/3 models responded, 2 High issues accepted and fixed (v0.6)
-- [ ] Finalize and transition to Design
+- [ ] Intake & Clarification — read brief, resolve ambiguities, surface Design decisions
+- [ ] Technical Design — draft design.md (architecture, interface, data model, capabilities)
+- [ ] Review Loop — internal (Ralph Loop) + external review of design.md
+- [ ] Finalization — exit criteria, handoff prep, human sign-off
 
 ## Pending Decisions
 
-- None — all 8 open questions resolved for MVP (see `docs/adf/open-questions-research.md`)
+- Caller identity mechanism for scope enforcement (flagged by external review, deferred to Design)
 
 ## Blockers
 
 - None
+
+## Discover Stage Handoff
+
+### What Was Produced
+
+- **intent.md v0.2** — North Star: persistent memory service for agent ecosystem
+- **discover-brief.md v0.6** — Full project contract: scope, success criteria, constraints, resolved open questions
+- **Research artifacts** — Landscape scan (Mem0, Letta, LangMem, ChatGPT, AWS), ACK prior art analysis, 8 open questions resolved
+
+### What Was Archived
+
+- `docs/_archive/2026-02-10-memory-layer-research.md` — Initial landscape research synthesis
+- `docs/_archive/2026-02-10-memory-systems-deep-dive.md` — Deep-dive across 7 memory systems
+- `docs/_archive/2026-02-10-open-questions-research.md` — Analysis resolving all 8 open questions
+
+### Success Criteria Status
+
+- 10 testable criteria defined in brief (all carry forward to Design/Develop)
+- No deferred criteria
+
+### Known Limitations
+
+- 1 open question for Design: caller identity mechanism for MCP scope enforcement
+- Kimi model timed out during external review (2/3 models responded — sufficient coverage)
+
+### Read Order for Design Stage
+
+1. `docs/intent.md` — North Star
+2. `docs/discover-brief.md` — Primary input (fully consumed)
+3. `docs/status.md` — This file (context + handoff)
 
 ## Session Log
 
@@ -36,3 +65,4 @@ updated: "2026-02-10"
 | 2026-02-10 | All 8 open questions researched and resolved for MVP. Synthesized ACK prior art (72 memories, hooks capture, Phase 2 blocker), 16 KB entries, and landscape research into `docs/adf/open-questions-research.md`. Updated brief to v0.3. Ready for internal review. |
 | 2026-02-10 | Phase 1 internal review complete (2 cycles). Fixed 2 Critical (session-end capture contradiction, write-time consolidation mechanism undefined), 2 High (untestable success criteria, undefined Tier jargon), 1 Low (issue log format). Brief v0.5. Ready for external review. |
 | 2026-02-10 | Phase 2 external review complete. Gemini + GPT reviewed (Kimi timed out). 6 issues raised, 2 accepted: embedding locality constraint added, caller identity gap flagged for Design. 4 rejected as Design-stage concerns. Brief v0.6. Ready for Discover-to-Design transition. |
+| 2026-02-10 | Discover stage complete. Archived research artifacts. Transitioned to Design stage. |

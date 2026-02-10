@@ -13,7 +13,7 @@ See `docs/intent.md`
 
 ## Current Stage
 
-Discover
+Design
 
 ## Context Map
 
@@ -21,8 +21,8 @@ Discover
 |------|-----------|---------|
 | docs/intent.md | Always | North Star |
 | docs/status.md | Always | Session state — review at start, update at end |
-| docs/discover-brief.md | Discover, Design | Project contract |
-| docs/adf/memory-layer-research.md | Reference | Landscape research synthesis |
+| docs/discover-brief.md | Design | Primary input — fully consumed |
+| docs/design.md | Design (after created) | Working design spec |
 
 ## Architecture Reference
 
