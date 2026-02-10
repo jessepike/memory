@@ -9,7 +9,7 @@ updated: "2026-02-10"
 ## Current State
 
 - **Phase:** Develop — In Progress
-- **Focus:** MCP integration coverage expanded for tool surface and error contracts. Next: packaging/bootstrap command documentation and clean setup verification.
+- **Focus:** Packaging/bootstrap path documented and verified in a clean venv. Next: final docs alignment and consistency pass across design/brief/status/backlog.
 
 ## Next Steps
 
@@ -31,7 +31,8 @@ updated: "2026-02-10"
 - [x] Develop Step 12 — MCP integration polish + end-to-end smoke checklist
 - [x] Develop Step 13 — Scope-authorization hardening for update/archive defense-in-depth
 - [x] Develop Step 14 — MCP-level integration tests for tool surface + error contracts
-- [ ] Develop Step 15 — Packaging/dev setup command docs + bootstrap verification
+- [x] Develop Step 15 — Packaging/dev setup command docs + bootstrap verification
+- [ ] Develop Step 16 — Final docs consistency alignment (design/brief/status/backlog)
 
 ## Pending Decisions
 
@@ -103,3 +104,4 @@ updated: "2026-02-10"
 | 2026-02-10 | Completed DEV-12 MCP integration polish: added scope-error serialization handling in MCP tool wrappers, fixed stats drift type mismatch, added MCP access regression tests, and added `scripts/mcp_smoke.py` (real dependency smoke checklist). Smoke and test suite passing. |
 | 2026-02-10 | Completed DEV-13 scope hardening: non-privileged callers now must provide matching namespace for ID-based `update_memory` and `archive_memory`. Added regression tests for missing/mismatched namespace guards. Full test suite and smoke checklist passing. |
 | 2026-02-10 | Completed DEV-14 MCP integration tests: added end-to-end tool flow coverage and explicit forbidden-scope/namespace mismatch contract checks at the MCP layer. Updated test payload parsing for FastMCP response shape variants. Full test suite and smoke checklist passing. |
+| 2026-02-10 | Completed DEV-15 packaging/bootstrap verification: updated README with concrete setup/dev/test/smoke/server commands, then validated in fresh `/tmp` venv using editable install (`pip install -e .[dev]`), full pytest pass, and smoke success (`tool_count=14`, `success=true`). |
