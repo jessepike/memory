@@ -9,7 +9,7 @@ updated: "2026-02-10"
 ## Current State
 
 - **Phase:** Develop — In Progress
-- **Focus:** End-to-end core library implemented (DB + embeddings + vector + orchestration). Now enforcing backlog-driven execution, status discipline, and regular commit cadence via AGENTS.md.
+- **Focus:** MCP smoke flow validated end-to-end with real dependencies. Next: harden scope authorization behavior for non-privileged update/archive flows.
 
 ## Next Steps
 
@@ -28,6 +28,8 @@ updated: "2026-02-10"
 - [x] Develop Step 9 — Failed lifecycle maintenance APIs (`list_failed_memories`, `retry_failed_memory`, `archive_failed_memory`)
 - [x] Develop Step 10 — Consolidation utility hardening + edge-case tests
 - [x] Develop Step 11 — MCP server tool definitions + dispatch integration
+- [x] Develop Step 12 — MCP integration polish + end-to-end smoke checklist
+- [ ] Develop Step 13 — Scope-authorization hardening for update/archive defense-in-depth
 
 ## Pending Decisions
 
@@ -96,3 +98,4 @@ updated: "2026-02-10"
 | 2026-02-10 | Develop Step 6-9 implemented. Added Chroma wrapper, canonicalization/hash utilities, and `MemoryStorage` orchestration for write/search/get/update/archive/review/stats plus reconciliation and failed-memory maintenance APIs. Added orchestration and consolidation tests; all passing. |
 | 2026-02-10 | Develop Step 10/11 implemented. Hardened consolidation normalization/hash helpers with edge-case tests. Added MCP server entrypoint with tool dispatch wiring for write/read/manage/stats and maintenance APIs backed by `MemoryStorage`. |
 | 2026-02-10 | Added required operational governance artifacts. Created `AGENTS.md` and `docs/backlog.md`, and updated `CLAUDE.md` to require backlog-first task execution, status updates, and regular commits for every tested slice. |
+| 2026-02-10 | Completed DEV-12 MCP integration polish: added scope-error serialization handling in MCP tool wrappers, fixed stats drift type mismatch, added MCP access regression tests, and added `scripts/mcp_smoke.py` (real dependency smoke checklist). Smoke and test suite passing. |

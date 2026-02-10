@@ -1,0 +1,15 @@
+# Memory Layer runtime configuration
+
+paths:
+  sqlite_db: data/memory.db
+  chroma_dir: data/chroma
+
+embedding:
+  model_name: all-MiniLM-L6-v2
+  allow_model_download_during_setup: true
+
+consolidation:
+  similarity_threshold: 0.92
+
+runtime:
+  enforce_offline: true
