@@ -8,19 +8,19 @@ updated: "2026-02-10"
 
 ## Current State
 
-- **Phase:** Design — Intake & Clarification
-- **Focus:** Transform validated brief into technical specification
+- **Phase:** Design — Technical Design (draft complete)
+- **Focus:** design.md v0.1 drafted, ready for Review Loop
 
 ## Next Steps
 
-- [ ] Intake & Clarification — read brief, resolve ambiguities, surface Design decisions
-- [ ] Technical Design — draft design.md (architecture, interface, data model, capabilities)
+- [x] Intake & Clarification — 7 decisions resolved (caller ID, embeddings, scope model, dedup, package naming, private namespace, consolidation approach)
+- [x] Technical Design — design.md v0.1 drafted (architecture, 9 MCP tools, data model, consolidation algorithm, decision log)
 - [ ] Review Loop — internal (Ralph Loop) + external review of design.md
 - [ ] Finalization — exit criteria, handoff prep, human sign-off
 
 ## Pending Decisions
 
-- Caller identity mechanism for scope enforcement (flagged by external review, deferred to Design)
+- None (all resolved during Intake)
 
 ## Blockers
 
@@ -66,3 +66,4 @@ updated: "2026-02-10"
 | 2026-02-10 | Phase 1 internal review complete (2 cycles). Fixed 2 Critical (session-end capture contradiction, write-time consolidation mechanism undefined), 2 High (untestable success criteria, undefined Tier jargon), 1 Low (issue log format). Brief v0.5. Ready for external review. |
 | 2026-02-10 | Phase 2 external review complete. Gemini + GPT reviewed (Kimi timed out). 6 issues raised, 2 accepted: embedding locality constraint added, caller identity gap flagged for Design. 4 rejected as Design-stage concerns. Brief v0.6. Ready for Discover-to-Design transition. |
 | 2026-02-10 | Discover stage complete. Archived research artifacts. Transitioned to Design stage. |
+| 2026-02-10 | Design Intake & Clarification complete. Resolved 7 decisions: caller-provided namespace, local embeddings (all-MiniLM-L6-v2), namespace-only scoping (dropped visibility), 0.92 dedup threshold, memory_core package naming, private=excluded-by-default, no-merge consolidation. Analyzed KB project architecture for pattern alignment. Drafted design.md v0.1 with full technical spec: architecture, 9 MCP tools, data model, write-time consolidation, decision log. Ready for Review Loop. |
