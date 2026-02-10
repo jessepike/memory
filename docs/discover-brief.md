@@ -1,8 +1,8 @@
 ---
 type: "brief"
 project: "Memory Layer"
-version: "0.5"
-status: "internal-review-complete"
+version: "0.6"
+status: "external-review-complete"
 review_cycle: 2
 created: "2026-02-10"
 updated: "2026-02-10"
@@ -72,7 +72,7 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 ## Constraints
 
 - Follow KB project's architectural patterns (SQLite + Chroma + MCP) for consistency
-- Local-first — no external service dependencies
+- Local-first — no external service dependencies; embeddings must be computed by a local/offline model (no cloud embedding API dependencies)
 - Single-user — no auth/multi-tenant complexity
 - Python (consistent with KB project)
 - MCP server as primary interface
@@ -82,7 +82,7 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 
 ## Open Questions
 
-> All 8 questions researched and resolved for MVP. Full analysis: `docs/adf/open-questions-research.md`
+> 8 of 9 questions resolved for MVP. Q9 (caller identity) deferred to Design. Full analysis: `docs/adf/open-questions-research.md`
 
 - [x] **Curation workflow** — Write-time consolidation using vector similarity + rules for MVP (not LLM-based). Review candidates surfaced via MCP tool. No TUI/CLI needed — MCP tools sufficient. ACK lesson: staging state required from day one, but curation as a separate phase was over-engineered. LLM-based ADD/UPDATE/DELETE/NOOP (Mem0 pattern) deferred to post-MVP.
 - [x] **Single store vs partitioned** — Single store with namespace metadata. SQLite + Chroma (KB pattern). Scoping enforced at query time via metadata filtering. Physical partitioning adds complexity for zero benefit at personal scale.
@@ -92,6 +92,7 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 - [x] **Write-back paths** — Hot path for MVP: explicit `write_memory` tool call (includes session-end calls as part of ADF discipline). Warm path (system-level session-end hook extraction) and cold path (background consolidation, decay) deferred until volume demands.
 - [x] **Cross-channel access architecture** — MCP-only for MVP. Core as Python library with clean API; MCP server is one interface, REST adapter is future second interface. Neither contains business logic.
 - [x] **State-based vs retrieval-based** — Retrieval-first for MVP. All memories stored as atomic facts with vector embeddings. State profiles (entity-level summaries) added later as a layer on top when entity coherence is needed.
+- [ ] **Caller identity for scope enforcement** — Design must define how caller identity is conveyed to the MCP server (e.g., caller_id in MCP context, derived from project path) so scope isolation can be enforced. Single-user, no auth — but the server needs to know which project namespace a caller belongs to. Flagged by external review.
 
 ## Issue Log
 
@@ -103,6 +104,9 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 | 4 | "Tier 1 / Tier 2" in Out of Scope undefined — no context for what these tiers mean | Ralph-Internal | High | Resolved | Replaced with "Automatic memory-to-KB promotion" — clear without jargon. |
 | 5 | Issue Log column headers don't match Brief Spec format (had Impact/Priority, spec uses Severity) | Ralph-Internal | Low | Resolved | Aligned columns with spec. |
 | 6 | Phase 1 internal review complete — 2 cycles, 2 Critical / 2 High / 1 Low found and resolved | Ralph-Internal | - | Complete | All issues addressed. Ready for Phase 2. |
+| 7 | Embedding locality not explicit — Chroma needs embeddings but local-first constraint didn't specify local computation | External-GPT | High | Resolved | Added to Constraints: embeddings must be computed by a local/offline model. |
+| 8 | Caller identity for scope enforcement undefined — success criteria require project isolation but no mechanism for MCP server to identify caller namespace | External-GPT | High | Resolved | Added as open question for Design to resolve. |
+| 9 | Phase 2 external review complete — 2 High issues accepted and addressed, 4 rejected as Design-stage concerns | External | - | Complete | Brief v0.6. Ready for transition. |
 
 ## Review Log
 
@@ -124,6 +128,24 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 
 **Outcome:** Internal review complete after 2 cycles. Brief is ready for Phase 2 (external review).
 
+### Phase 2: External Review
+
+**Date:** 2026-02-10
+**Mechanism:** External model review (Gemini 2.5 Flash Lite, GPT-5 Mini)
+**Models Responding:** 2/3 (Kimi K2.5 timed out)
+**Issues Raised:** 6 total (2 accepted, 4 rejected as Design-stage concerns)
+**Actions Taken:**
+- **Accepted (2 issues):**
+  - Embedding locality constraint missing (High) — Added explicit local-only embedding requirement to Constraints
+  - Caller identity for scope enforcement undefined (High) — Added as open question for Design to resolve
+- **Rejected (4 issues):**
+  - Memory entry schema underspecified — Design-stage work, not brief-level gap
+  - Write-time consolidation parameters undefined — Tunable implementation detail for Design
+  - Transactional consistency between SQLite + Chroma — Implementation detail for Design
+  - Success criterion testability (write with metadata) — Criteria is clear enough
+
+**Outcome:** External review complete. Brief v0.6 ready for Discover-to-Design transition.
+
 ## Revision History
 
 | Version | Date | Changes |
@@ -134,3 +156,4 @@ Initially serves ADF development agents and Krypton. Architecturally, must suppo
 | 0.3.1 | 2026-02-10 | Added integrated capture constraint: session-end memory check folded into existing ADF discipline, not separate. Added non-duplication constraint. |
 | 0.4 | 2026-02-10 | Internal review cycle 1: Resolved session-end capture contradiction, clarified write-time consolidation as rule-based for MVP, replaced untestable success criteria, removed Tier 1/Tier 2 jargon, aligned Issue Log format with spec. |
 | 0.5 | 2026-02-10 | Internal review cycle 2: Zero issues found. Phase 1 complete. Status set to internal-review-complete. |
+| 0.6 | 2026-02-10 | External review (Phase 2): 2/3 models responded. 2 High issues accepted (embedding locality constraint, caller identity gap). 4 issues rejected as Design-stage concerns. Brief ready for transition. |
