@@ -8,12 +8,12 @@ updated: "2026-02-10"
 
 ## Current State
 
-- **Phase:** Exploration / Crystallization
-- **Focus:** Gathering context from KB + ACK prior art, refining brief framing
+- **Phase:** Exploration
+- **Focus:** Research open questions before finalizing brief
 
 ## Next Steps
 
-- [ ] Research open questions (curation workflow, single vs partitioned store, capture mechanisms)
+- [ ] Deep-dive research: curation workflow patterns, single vs partitioned store, capture mechanisms, state-based vs retrieval-based
 - [ ] Resolve enough open questions for solid brief
 - [ ] Internal review (Ralph Loop)
 - [ ] External review
