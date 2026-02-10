@@ -1,8 +1,8 @@
 ---
 type: "design"
 project: "Memory Layer"
-version: "0.1"
-status: "draft"
+version: "0.3"
+status: "external-review-complete"
 created: "2026-02-10"
 updated: "2026-02-10"
 brief_ref: "./discover-brief.md"
@@ -16,6 +16,14 @@ intent_ref: "./intent.md"
 Technical specification for the Memory Layer — a persistent, queryable memory service for the personal agent ecosystem. Transforms the validated Brief (v0.6) into an implementable architecture following the Knowledge Base project's proven patterns (SQLite + Chroma + MCP), adapted for contextual memory semantics with local-only embeddings.
 
 **Classification:** App / personal / mvp / standalone
+
+### Brief Deviations
+
+Design simplifies two Brief items based on Intake decisions:
+
+1. **Visibility controls dropped** (D3) — Brief lists "Visibility controls (public, restricted, private)" in scope and "visibility metadata" in success criterion #2. Design replaces visibility with namespace-only scoping (project/global/private). In a single-user system, namespace provides equivalent isolation. Success criterion #2 is satisfied: agents write memories with scope (namespace), type (memory_type), and writer metadata.
+
+2. **Consolidation simplified** (D4) — Brief specifies ADD/UPDATE/SKIP with contradiction detection for write-time consolidation. Design implements ADD/SKIP only (0.92+ threshold). UPDATE and contradiction detection move to Backlog as part of LLM-based consolidation (post-MVP). Rationale: rule-based UPDATE requires merge logic that's error-prone without LLM judgment. Conservative SKIP-only dedup is safer for MVP.
 
 ## Architecture
 
@@ -148,12 +156,15 @@ memory/
 | Global | `"global"` | Always included in search | `namespace="global"` |
 | Private | `"private"` | Excluded from search unless explicitly requested | `namespace="private"` |
 
-**Search resolution:** When a caller searches with `namespace="memory-layer"`:
-1. Search entries where namespace = "memory-layer" OR namespace = "global"
-2. Exclude namespace = "private" (unless caller explicitly passes `namespace="private"`)
-3. Exclude status = "archived"
+**Search resolution:**
 
-When namespace is omitted, search global only (+ exclude private, archived).
+| Caller passes | Searches | Use case |
+|---------------|----------|----------|
+| `namespace="memory-layer"` | memory-layer + global | Project agent — sees own scope + global |
+| `namespace="private"` | private only | Explicit private query |
+| *namespace omitted* | All namespaces except private | Cross-scope consumer (e.g., Krypton) |
+
+All searches exclude `status = "archived"`.
 
 ### Status State Machine
 
@@ -199,6 +210,13 @@ Consolidation runs before write — see Write-Time Consolidation section.
 
 Returns: `{ id, updated_fields: [...] }`
 
+**Update flow (dual-store, Chroma-first ordering):**
+1. Validate entry exists in SQLite (status = "committed")
+2. If `content` changed: generate new embedding → `collection.upsert(ids=[id], embeddings=[emb], documents=[content], metadatas=[meta])` → update SQLite fields + `updated_at`
+3. If only metadata changed: `collection.update(ids=[id], metadatas=[meta])` → update SQLite fields + `updated_at`
+4. No staged status for updates — entry remains "committed" throughout
+5. **Ordering rationale:** Chroma operation first. If Chroma fails, SQLite is unchanged (consistent). If SQLite fails after Chroma succeeds, next update corrects the drift.
+
 ### Read Tools
 
 **`search_memories`** — Semantic search with namespace filtering.
@@ -206,7 +224,7 @@ Returns: `{ id, updated_fields: [...] }`
 | Param | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | query | string | yes | | Search query |
-| namespace | string | no | | If set, searches this namespace + global. If omitted, global only. |
+| namespace | string | no | | If set, searches this namespace + global. If omitted, searches all except private (cross-scope). |
 | memory_type | string | no | | Filter by type |
 | limit | int | no | 10 | Max results |
 
@@ -245,7 +263,7 @@ Returns: `{ recent: [...], relevant: [...] }` — recent entries for namespace +
 |-------|------|----------|
 | id | string | yes |
 
-Sets status = "archived", removes embedding from Chroma. Returns: `{ id, archived: true }`
+**Archive flow (Chroma-first ordering):** `collection.delete(ids=[id])` → update SQLite status = "archived". If Chroma delete fails, entry remains searchable (safe fallback). Returns: `{ id, archived: true }`
 
 **`review_candidates`** — Surface memories needing human review.
 
@@ -255,6 +273,8 @@ Sets status = "archived", removes embedding from Chroma. Returns: `{ id, archive
 | limit | int | no | 20 | Max results |
 
 Returns entries where confidence < 0.7 OR has high-similarity pair (>= 0.85 with another committed entry).
+
+**Implementation:** On-demand computation at query time. Low-confidence entries: SQLite query (fast). High-similarity pairs: for each committed entry in scope, query Chroma for nearest neighbor — if similarity >= 0.85, include as candidate. O(n) Chroma queries; acceptable at MVP scale (hundreds of entries). No pre-computed similarity storage needed.
 
 Returns: `[{ id, content, reason: "low_confidence" | "high_similarity", confidence?, similar_entries?: [{ id, content, similarity }] }]`
 
@@ -274,13 +294,16 @@ Runs on every `write_memory` call to prevent duplicate accumulation.
 
 ### Algorithm
 
+**Important:** Chroma returns cosine **distance** (lower = more similar), not similarity. Convert: `similarity = 1 - distance`. All thresholds below are expressed as similarity values.
+
 ```
-1. Generate embedding for new content
+1. Generate embedding for new content (sentence-transformers)
 2. Search Chroma for top-5 similar entries in target namespace + global
    - Filter: status = 'committed', same namespace OR 'global'
+   - Convert Chroma distances to similarities: similarity = 1 - distance
 3. Check top result similarity:
-   - >= 0.92: SKIP — return { action: "skipped", similar_id, similarity }
-   - < 0.92: ADD — proceed with staged commit
+   - >= 0.92 (distance <= 0.08): SKIP — return { action: "skipped", similar_id, similarity }
+   - < 0.92 (distance > 0.08): ADD — proceed with staged commit
 4. No UPDATE or MERGE for MVP
 ```
 
@@ -354,7 +377,16 @@ Caller identity (the one question carried from Discover) resolved as D1: caller-
 
 | # | Issue | Source | Severity | Status | Resolution |
 |---|-------|--------|----------|--------|------------|
-| — | No issues found yet | — | — | — | Pending review |
+| 1 | Visibility dropped but Brief success criterion #2 and In Scope reference it — no acknowledgment | Ralph-Design | High | Resolved | Added Brief Deviations section explaining D3 simplification and how success criterion is still satisfied via namespace |
+| 2 | Cross-scope search impossible — namespace omitted returns global only, Krypton can't search all namespaces | Ralph-Design | High | Resolved | Changed default: namespace omitted now searches all except private. Added search resolution table. |
+| 3 | Consolidation simplified (ADD/SKIP only) vs Brief's ADD/UPDATE/SKIP + contradiction detection — no explanation | Ralph-Design | High | Resolved | Added to Brief Deviations section with rationale for D4 simplification |
+| 4 | `update_memory` dual-store flow unspecified — developer wouldn't know how to handle SQLite+Chroma update | Ralph-Design | High | Resolved | Added update flow specification: content change triggers re-embed+upsert, metadata-only updates skip embedding |
+| 5 | `review_candidates` similarity data not captured — consolidation doesn't persist 0.85-0.92 similarity info | Ralph-Design | High | Resolved | Specified on-demand computation at query time — O(n) Chroma queries, acceptable at MVP scale |
+| 6 | Phase 1 internal review complete — 2 cycles, 0 Critical / 5 High / 0 Low found and resolved | Ralph-Design | — | Complete | All issues addressed. Ready for Phase 2. |
+| 7 | Chroma returns cosine distance, not similarity — thresholds would be inverted causing incorrect dedup/review decisions | External-GPT | High | Resolved | Added distance↔similarity conversion note. Expressed thresholds in both forms. |
+| 8 | Chroma metadata update operation unspecified — developer wouldn't know exact API call for metadata-only updates | External-Gemini | High | Resolved | Added explicit `collection.update(ids, metadatas)` and `collection.upsert()` calls to update flow |
+| 9 | Update/archive dual-store ordering unspecified — Chroma failure after SQLite change creates divergence | External-GPT | High | Resolved | Specified Chroma-first ordering for both update and archive flows with failure rationale |
+| 10 | Phase 2 external review complete — 3 High accepted, 4 rejected (namespace ambiguity, timestamps, upsert verification, race condition) | External | — | Complete | Design v0.3 ready for finalization |
 
 ## Develop Handoff
 
@@ -364,12 +396,45 @@ Caller identity (the one question carried from Discover) resolved as D1: caller-
 
 ## Review Log
 
-> Populated during review phases.
+### Phase 1: Internal Review
 
-*Section will be completed during Review Loop.*
+**Date:** 2026-02-10
+**Mechanism:** Manual Ralph Loop (2 cycles)
+**Cycle 1 Issues Found:** 0 Critical, 5 High, 0 Low
+**Actions Taken:**
+- Brief Deviations section added — documented D3 (visibility→namespace) and D4 (consolidation simplification) with rationale
+- Cross-scope search fixed — namespace omitted now searches all except private, enabling Krypton access
+- Update flow specified — dual-store update behavior for content vs metadata changes
+- review_candidates implementation clarified — on-demand O(n) computation at query time
+
+**Cycle 2 Issues Found:** 0 Critical, 0 High, 0 Low
+**Actions Taken:** None required — all prior fixes verified, no new issues found.
+
+**Outcome:** Internal review complete after 2 cycles. Design v0.2 ready for Phase 2 (external review).
+
+### Phase 2: External Review
+
+**Date:** 2026-02-10
+**Mechanism:** External model review (Gemini 2.5 Flash Lite, GPT-5 Mini)
+**Models Responding:** 2/3 (Kimi K2.5 timed out)
+**Issues Raised:** 7 total (3 accepted, 4 rejected)
+**Actions Taken:**
+- **Accepted (3 issues):**
+  - Chroma distance vs similarity semantics (High, GPT) — Added conversion note and dual-form thresholds
+  - Chroma metadata update operation unspecified (High, Gemini) — Added explicit API calls to update flow
+  - Update/archive dual-store ordering (High, GPT) — Specified Chroma-first ordering with failure rationale
+- **Rejected (4 issues):**
+  - Namespace omitted behavior ambiguous (Medium, Gemini) — By design; search resolution table is explicit
+  - ISO 8601 timestamps vs native types (Medium, Gemini) — Standard SQLite approach, not a design gap
+  - Chroma upsert/delete verification steps (High, GPT) — Over-engineering for MVP; KB uses same patterns
+  - Concurrent write race condition (Medium, GPT) — Single-user MVP, stdio is sequential per connection
+
+**Outcome:** External review complete. Design v0.3 ready for finalization.
 
 ## Revision History
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2026-02-10 | Initial draft from Intake & Clarification decisions. Full technical spec. |
+| 0.2 | 2026-02-10 | Internal review cycle 1: 5 High issues found and resolved. Added Brief Deviations section, fixed cross-scope search, specified update flow, clarified review_candidates implementation. |
+| 0.3 | 2026-02-10 | External review (Phase 2): 2/3 models responded. 3 High issues accepted (Chroma distance semantics, metadata update API, dual-store ordering). 4 rejected. Ready for finalization. |
