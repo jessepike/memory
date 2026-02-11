@@ -12,6 +12,10 @@ updated: "2026-02-10"
 | DEL-01 | P1 | done | agent | Phase 1 Intake & Readiness Check — verify Develop outputs | All checks pass, delivery scope understood |
 | DEL-02 | P1 | done | agent | Phase 2 Delivery Capability Assessment — manifest.md + capabilities.md | Artifacts created with registry summary |
 | DEL-03 | P1 | done | agent | Phase 3 Delivery Planning — plan.md + tasks.md | Plan with 3-tier testing, rollback, 11 atomic tasks |
+| DEL-04 | P1 | done | agent | Phase 4 Review & Approval (simplified) | Self-review passed, human approved |
+| DEL-05 | P1 | done | agent | Phases 5+6 Infrastructure + Deployment | Claude Code connected; scope bug fixed; Codex/Gemini deferred |
+| DEL-06 | P1 | done | agent | Phase 7 Validation (Tier 1+2+3) | All tiers pass; 10/10 success criteria met |
+| DEL-07 | P1 | done | agent | Phase 8 Milestone Closeout | Success criteria mapped, access docs, seal |
 
 ## Todo
 

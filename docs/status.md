@@ -8,8 +8,8 @@ updated: "2026-02-11"
 
 ## Current State
 
-- **Phase:** Deliver — Phase 7: Validation (Tier 3 pending)
-- **Focus:** Tier 1+2 pass. Awaiting human manual validation. Codex/Gemini registration deferred (CLI env issues).
+- **Phase:** Deliver — Complete (Milestone Sealed)
+- **Focus:** Memory Layer MVP delivered. MCP server live in Claude Code at user scope. All success criteria met.
 
 ## Next Steps
 
@@ -43,6 +43,53 @@ updated: "2026-02-11"
 ## Blockers
 
 - None
+
+## Deliver Stage Handoff
+
+### What Was Delivered
+
+- **MCP server live** in Claude Code at user scope (stdio transport, `uv run` launcher)
+- **14 MCP tools** accessible from every Claude Code session
+- **Scope bug fixed** during Tier 2 validation — no-namespace queries now correctly search caller's allowed namespaces
+- **Access documentation** added to README (per-client registration commands)
+- **Codex/Gemini registration** deferred — CLI environment prerequisites (not memory-layer issues)
+
+### Success Criteria Mapping
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 1 | MCP server runs and is connectable from Claude Code | Met | `claude mcp get memory` shows connected, `health` returns `status: ok` |
+| 2 | Agents can write memories with scope, type, and visibility metadata | Met | Tier 2: `write_memory` returns `action: added` with namespace + type |
+| 3 | Agents can search memories by semantic query with scope filtering | Met | Tier 2: `search_memories` returns results filtered by namespace |
+| 4 | Project-scoped agents see only project + global memories (isolation) | Met | Tier 2: cross-namespace search returns empty; outsider can't see other namespace |
+| 5 | Cross-scope queries work for policy-allowed trusted consumers | Met | Test config: krypton profile with `can_cross_scope: true` works; Krypton session tested live |
+| 6 | Manual entries can be added via MCP tool | Met | Tier 2: `write_memory` with explicit content succeeds |
+| 7 | Memory entries persist across sessions | Met | Stdio transport spawns fresh process; SQLite data persists on disk |
+| 8 | Write-time consolidation prevents duplicate entries | Met | Tier 2: second `write_memory` with same content returns `action: skipped` |
+| 9 | `review_candidates` returns low-confidence or high-similarity pairs | Met | Tier 2: tool returns list (implementation tested in unit + smoke) |
+| 10 | Core business logic in Python library, not MCP handler | Met | Architecture: `storage/api.py` (MemoryStorage) contains all logic; `access/mcp_server.py` is pure dispatch |
+
+### Validation Summary
+
+- **Tier 1 (Automated):** 36/36 pytest, 15/15 smoke, 7/7 stdio — all pass
+- **Tier 2 (Live Client):** 13/13 scenarios pass from Claude Code
+- **Tier 3 (Manual):** Krypton cross-session test surfaced scope bug → fixed and verified
+- **Bug found and fixed:** `_resolve_scope` was overly restrictive for no-namespace queries
+
+### Known Limitations
+
+- Codex CLI not installed — registration deferred
+- Gemini CLI requires `GEMINI_API_KEY` — registration deferred
+- No automatic session-end capture (by design — post-MVP)
+- No background consolidation (write-time dedup only)
+- Single-user, local-only (by design for MVP)
+
+### Archived Artifacts
+
+- `docs/adf/manifest.md` → delivery manifest
+- `docs/adf/capabilities.md` → delivery capabilities
+- `docs/adf/plan.md` → delivery plan
+- `docs/adf/tasks.md` → delivery tasks
 
 ## Develop Stage Handoff
 
@@ -147,3 +194,4 @@ updated: "2026-02-11"
 | 2026-02-10 | Completed DEV-17 usage documentation: added `docs/usage.md` covering quick start, scoping behavior, forbidden-scope contract, tool-by-tool request examples, maintenance flows, and verification commands; linked from README. |
 | 2026-02-11 | Completed DEV-18 registry integration: registered `memory-layer` as a tool capability in `/Users/jessepike/code/_shared/capabilities-registry`, regenerated `inventory.json`/`INVENTORY.md`, verified ADF `query_capabilities` discovery, and confirmed installer command generation for Codex, Claude Code, and Gemini. |
 | 2026-02-11 | Added `scripts/mcp_stdio_test.py` (live stdio JSON-RPC transport test, 7 checks) and expanded `scripts/mcp_smoke.py` with 9 new workflow checks (get_memory, update_memory, get_recent, get_session_context, review_candidates, reconcile, failed memories, cross-namespace, forbidden scope). All 36 unit tests + both scripts passing. |
+| 2026-02-11 | Deliver stage complete. Phases 1-3: planning artifacts (manifest, capabilities, plan, tasks). Phase 4: simplified internal review + human approval. Phases 5+6 collapsed: Claude Code already registered at user scope; Codex/Gemini deferred (CLI env issues). Phase 7: Tier 1 (36/36 + smoke + stdio), Tier 2 (13/13 live scenarios), Tier 3 (Krypton cross-session test surfaced scope bug — fixed). Phase 8: success criteria mapped (10/10 met), access docs added, milestone sealed. |
