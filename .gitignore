@@ -30,3 +30,6 @@ Thumbs.db
 
 # Claude
 .claude/local/
+
+# Lock files
+uv.lock
