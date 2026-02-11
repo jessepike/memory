@@ -26,6 +26,7 @@ Deliver
 | docs/discover-brief.md | Deliver | Success criteria reference |
 | docs/design.md | Deliver (validation) | Architecture reference |
 | docs/usage.md | Deliver | Tool-by-tool usage examples |
+| docs/memory-routing.md | Always | Memory routing heuristic — when to use MCP vs local memory vs KB |
 
 ## Architecture Reference
 
