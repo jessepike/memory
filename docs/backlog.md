@@ -23,7 +23,7 @@ updated: "2026-02-10"
 |----|----------|--------|-------|-------------|-----------|
 | POST-01 | P1 | todo | — | Define routing heuristic between Memory Layer MCP and Claude Code auto-memory | Documented convention or enforcement mechanism that prevents duplication between the two systems |
 | POST-02 | P1 | todo | — | Add usage logging to MCP server | Every tool call logs caller_id, tool name, namespace, timestamp to append-only store. Foundation for all observability. |
-| POST-03 | P1 | todo | — | Add memory check/write to ADF session protocol | Global CLAUDE.md updated: session start = check memory for context; session end = write key decisions/learnings. Agents use memory by convention. |
+| POST-03 | P1 | todo | — | Codify multi-system session protocol in ADF spec + global CLAUDE.md | (1) Update ADF-STAGES-SPEC.md session boundary protocol with full writeout: status.md, MCP memory, KB learnings, backlog, commit, user summary. (2) Update global ~/.claude/CLAUDE.md to implement spec. (3) Add session-start: check memory + KB for context. Touches ADF repo, not memory-layer. |
 | POST-04 | P2 | todo | — | Add usage report tool (`get_usage_report`) | MCP tool or script that reports: memories written/searched this period, search-to-write ratio, active namespaces, dedup rate, empty searches (gap signal) |
 | POST-05 | P2 | todo | — | Register memory MCP in Codex and Gemini | Codex CLI installed + registered; Gemini API key configured + registered |
 | POST-06 | P3 | todo | — | Weekly review cadence: `get_stats` + `review_candidates` | Run manually for first month to build intuition on usage patterns before automating |
