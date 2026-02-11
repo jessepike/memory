@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import asdict, is_dataclass
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
 
+from memory_core.access.usage_logger import UsageLogger
 from memory_core.storage.api import MemoryStorage, ScopeForbidden
 
 
@@ -36,12 +38,19 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
 
     memory_storage = storage or MemoryStorage.from_config_path(config_path)
     memory_storage.initialize()
+
+    usage_logger = UsageLogger(memory_storage.config.paths.usage_log)
+
     app = FastMCP("memory-layer")
 
-    def _run_tool(func, *args, **kwargs):  # type: ignore[no-untyped-def]
+    def _run_tool(func, *args, _tool_name: str = "unknown", _caller_id: str = "unknown", _namespace: str | None = None, **kwargs):  # type: ignore[no-untyped-def]
+        start = time.monotonic()
         try:
-            return _serialize(func(*args, **kwargs))
+            result = _serialize(func(*args, **kwargs))
+            usage_logger.log(_tool_name, _caller_id, _namespace, (time.monotonic() - start) * 1000, "success")
+            return result
         except ScopeForbidden as exc:
+            usage_logger.log(_tool_name, _caller_id, _namespace, (time.monotonic() - start) * 1000, "error", str(exc))
             return _serialize(exc.error)
 
     @app.tool()
@@ -65,6 +74,9 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
                 "source_project": source_project,
                 "confidence": confidence,
             },
+            _tool_name="write_memory",
+            _caller_id=writer_id,
+            _namespace=namespace,
         )
 
     @app.tool()
@@ -82,11 +94,14 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
             namespace=namespace,
             memory_type=memory_type,
             limit=limit,
+            _tool_name="search_memories",
+            _caller_id=caller_id,
+            _namespace=namespace,
         )
 
     @app.tool()
     def get_memory(id: str, caller_id: str = "unknown") -> Any:
-        return _run_tool(memory_storage.get_memory, id, caller_id=caller_id)
+        return _run_tool(memory_storage.get_memory, id, caller_id=caller_id, _tool_name="get_memory", _caller_id=caller_id)
 
     @app.tool()
     def get_recent(
@@ -103,6 +118,9 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
             memory_type=memory_type,
             limit=limit,
             days=days,
+            _tool_name="get_recent",
+            _caller_id=caller_id,
+            _namespace=namespace,
         )
 
     @app.tool()
@@ -118,6 +136,9 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
             namespace=namespace,
             query=query,
             limit=limit,
+            _tool_name="get_session_context",
+            _caller_id=caller_id,
+            _namespace=namespace,
         )
 
     @app.tool()
@@ -143,11 +164,11 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
             "confidence": confidence,
         }
         filtered = {key: value for key, value in payload.items() if value is not None or key == "id"}
-        return _run_tool(memory_storage.update_memory, filtered, caller_id=caller_id)
+        return _run_tool(memory_storage.update_memory, filtered, caller_id=caller_id, _tool_name="update_memory", _caller_id=caller_id, _namespace=namespace)
 
     @app.tool()
     def archive_memory(id: str, caller_id: str = "unknown", namespace: str | None = None) -> Any:
-        return _run_tool(memory_storage.archive_memory, id, caller_id=caller_id, namespace=namespace)
+        return _run_tool(memory_storage.archive_memory, id, caller_id=caller_id, namespace=namespace, _tool_name="archive_memory", _caller_id=caller_id, _namespace=namespace)
 
     @app.tool()
     def review_candidates(
@@ -155,31 +176,34 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
         namespace: str | None = None,
         limit: int = 20,
     ) -> Any:
-        return _run_tool(memory_storage.review_candidates, caller_id=caller_id, namespace=namespace, limit=limit)
+        return _run_tool(memory_storage.review_candidates, caller_id=caller_id, namespace=namespace, limit=limit, _tool_name="review_candidates", _caller_id=caller_id, _namespace=namespace)
 
     @app.tool()
     def get_stats(caller_id: str = "unknown", namespace: str | None = None) -> Any:
-        return _run_tool(memory_storage.get_stats, caller_id=caller_id, namespace=namespace)
+        return _run_tool(memory_storage.get_stats, caller_id=caller_id, namespace=namespace, _tool_name="get_stats", _caller_id=caller_id, _namespace=namespace)
 
     @app.tool()
     def reconcile_dual_store() -> Any:
-        return _run_tool(memory_storage.reconcile_dual_store)
+        return _run_tool(memory_storage.reconcile_dual_store, _tool_name="reconcile_dual_store")
 
     @app.tool()
     def list_failed_memories(limit: int = 100, older_than_days: int | None = None) -> Any:
-        return _run_tool(memory_storage.list_failed_memories, limit=limit, older_than_days=older_than_days)
+        return _run_tool(memory_storage.list_failed_memories, limit=limit, older_than_days=older_than_days, _tool_name="list_failed_memories")
 
     @app.tool()
     def retry_failed_memory(id: str) -> Any:
-        return _run_tool(memory_storage.retry_failed_memory, id)
+        return _run_tool(memory_storage.retry_failed_memory, id, _tool_name="retry_failed_memory")
 
     @app.tool()
     def archive_failed_memory(id: str) -> Any:
-        return _run_tool(memory_storage.archive_failed_memory, id)
+        return _run_tool(memory_storage.archive_failed_memory, id, _tool_name="archive_failed_memory")
 
     @app.tool()
     def health() -> dict[str, str]:
-        return {"status": "ok"}
+        start = time.monotonic()
+        result = {"status": "ok"}
+        usage_logger.log("health", "unknown", None, (time.monotonic() - start) * 1000, "success")
+        return result
 
     return app
 

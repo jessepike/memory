@@ -93,6 +93,7 @@ class PathsConfig(BaseModel):
 
     sqlite_db: str = "data/memory.db"
     chroma_dir: str = "data/chroma"
+    usage_log: str = "data/usage.jsonl"
 
 
 class EmbeddingConfig(BaseModel):

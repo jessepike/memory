@@ -8,13 +8,18 @@ from dataclasses import dataclass
 from typing import Any
 
 from memory_core.access.mcp_server import create_server
-from memory_core.models import ForbiddenScopeError
+from memory_core.models import ForbiddenScopeError, MemoryConfig
 from memory_core.storage.api import ScopeForbidden
 
 
 @dataclass
 class _FakeStorage:
     initialized: bool = False
+    config: MemoryConfig = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.config is None:
+            self.config = MemoryConfig()
 
     def initialize(self) -> None:
         self.initialized = True

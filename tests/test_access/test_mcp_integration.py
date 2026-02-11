@@ -53,6 +53,7 @@ def _write_test_config(tmp_path: Path) -> Path:
             paths:
               sqlite_db: {tmp_path / 'memory.db'}
               chroma_dir: {tmp_path / 'chroma'}
+              usage_log: {tmp_path / 'usage.jsonl'}
             embedding:
               model_name: all-MiniLM-L6-v2
               allow_model_download_during_setup: true
@@ -206,5 +207,44 @@ def test_mcp_scope_error_contracts(monkeypatch, tmp_path: Path) -> None:
         )
         assert archive_mismatch["error_code"] == "forbidden_scope"
         assert archive_mismatch["id"] == memory_id
+
+    asyncio.run(run())
+
+
+def test_mcp_tool_calls_produce_usage_log(monkeypatch, tmp_path: Path) -> None:
+    async def run() -> None:
+        monkeypatch.setitem(
+            sys.modules,
+            "sentence_transformers",
+            SimpleNamespace(SentenceTransformer=_FakeSentenceTransformer),
+        )
+
+        app = create_server(config_path=str(_write_test_config(tmp_path)))
+
+        await app.call_tool("health", {})
+        await app.call_tool(
+            "write_memory",
+            {"content": "usage test", "namespace": "demo", "writer_id": "demo-agent"},
+        )
+        await app.call_tool(
+            "search_memories",
+            {"query": "usage", "caller_id": "demo-agent", "namespace": "demo"},
+        )
+
+        usage_log = tmp_path / "usage.jsonl"
+        assert usage_log.exists(), "usage.jsonl should be created"
+        lines = usage_log.read_text().strip().split("\n")
+        assert len(lines) >= 3
+
+        entries = [json.loads(line) for line in lines]
+        tool_names = [e["tool"] for e in entries]
+        assert "health" in tool_names
+        assert "write_memory" in tool_names
+        assert "search_memories" in tool_names
+
+        for entry in entries:
+            assert "ts" in entry
+            assert "duration_ms" in entry
+            assert entry["status"] == "success"
 
     asyncio.run(run())
