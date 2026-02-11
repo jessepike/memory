@@ -8,17 +8,17 @@ updated: "2026-02-11"
 
 ## Current State
 
-- **Phase:** Post-MVP — Observability & Adoption
-- **Focus:** MVP delivered and sealed. Now: drive agent adoption, add usage logging, monitor value. See backlog POST-01 through POST-06.
+- **Phase:** Feature-complete
+- **Focus:** All memory-layer code work done. 15 MCP tools, 51 tests, full smoke suite. Remaining cross-cutting concerns moved to owning projects (capabilities-registry CR-10, Krypton B17, ADF B86).
 
 ## Next Steps
 
 - [x] POST-01: Define memory routing heuristic (MCP vs auto-memory)
 - [x] POST-02: Add usage logging to MCP server (observability foundation)
-- [ ] POST-03: Add memory check/write to ADF session protocol (adoption driver)
+- [x] POST-03: ADF session protocol → moved to ADF B86
 - [x] POST-04: Add usage report tool (monitoring)
-- [ ] POST-05: Register in Codex and Gemini (expand reach)
-- [ ] POST-06: Weekly stats + review_candidates for first month (manual monitoring)
+- [x] POST-05: Register in Codex/Gemini → moved to capabilities-registry CR-10
+- [x] POST-06: Weekly review cadence → moved to Krypton B17
 - [x] Develop Step 1 — Scaffold project (`pyproject.toml`, package layout, config)
 - [x] Develop Step 2 — Implement Pydantic models (`memory_core/models.py`)
 - [x] Develop Step 3 — Implement SQLite schema + DB layer (`memory_core/storage/schema.sql`, `db.py`)
