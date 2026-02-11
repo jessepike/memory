@@ -13,7 +13,7 @@ See `docs/intent.md`
 
 ## Current Stage
 
-Develop
+Deliver
 
 ## Context Map
 
@@ -23,8 +23,9 @@ Develop
 | docs/intent.md | Always | North Star |
 | docs/status.md | Always | Session state — review at start, update at end |
 | docs/backlog.md | Always | Active task queue and execution order |
-| docs/discover-brief.md | Design | Primary input — fully consumed |
-| docs/design.md | Design (after created) | Working design spec |
+| docs/discover-brief.md | Deliver | Success criteria reference |
+| docs/design.md | Deliver (validation) | Architecture reference |
+| docs/usage.md | Deliver | Tool-by-tool usage examples |
 
 ## Architecture Reference
 
@@ -38,14 +39,16 @@ Develop
 
 - Language: Python
 - Storage: SQLite + Chroma
-- API: MCP server (stdio)
-- Framework: TBD (Design stage)
+- API: MCP server (stdio, FastMCP)
+- Embeddings: sentence-transformers (all-MiniLM-L6-v2)
 
 ## Commands
 
-- Setup: `TBD`
-- Dev: `TBD`
-- Test: `TBD`
+- Setup: `pip install -e ".[dev]"`
+- Test: `python -m pytest tests/ -q`
+- Smoke: `python scripts/mcp_smoke.py --json`
+- Stdio test: `python scripts/mcp_stdio_test.py --json`
+- Server: `python -m memory_core.access.mcp_server`
 
 ## Workflow Requirements
 

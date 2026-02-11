@@ -1,15 +1,15 @@
 ---
 project: "Memory Layer"
-stage: "Develop"
-updated: "2026-02-10"
+stage: "Deliver"
+updated: "2026-02-11"
 ---
 
 # Status
 
 ## Current State
 
-- **Phase:** Develop — In Progress
-- **Focus:** Expanded test coverage with live stdio transport test and comprehensive smoke test workflows.
+- **Phase:** Deliver — Phase 1: Intake & Readiness Check
+- **Focus:** Develop complete. Transitioning to Deliver for deployment to local agent ecosystem.
 
 ## Next Steps
 
@@ -43,6 +43,42 @@ updated: "2026-02-10"
 ## Blockers
 
 - None
+
+## Develop Stage Handoff
+
+### What Was Produced
+
+- **14 MCP tools** — write_memory, search_memories, get_memory, get_recent, get_session_context, update_memory, archive_memory, review_candidates, get_stats, reconcile_dual_store, list_failed_memories, retry_failed_memory, archive_failed_memory, health
+- **3-layer architecture** — MCP server (`access/mcp_server.py`) → MemoryStorage orchestration (`storage/api.py`) → dual store (SQLite `storage/db.py` + Chroma `storage/vector_store.py`)
+- **Supporting layers** — Pydantic models (`models.py`), embedding service (`utils/embeddings.py`), YAML config loader (`config.py`), canonicalization/hash utilities (`utils/consolidation.py`)
+- **36 unit/integration tests** — models, DB, config, embeddings, orchestration, consolidation, MCP integration, error contracts
+- **2 smoke/transport scripts** — `scripts/mcp_smoke.py` (15 in-process checks), `scripts/mcp_stdio_test.py` (7 stdio JSON-RPC checks)
+- **Documentation** — `docs/usage.md` (tool-by-tool examples), README (bootstrap/dev commands), capabilities registry entry
+
+### What Was Archived
+
+- No Develop-stage planning artifacts to archive (research artifacts already archived during Discover)
+
+### Success Criteria Status
+
+- All 10 testable criteria from Brief are addressable by implementation
+- Scope authorization, dedup, reconciliation, failed-memory lifecycle all implemented and tested
+- MCP server registered in capabilities registry and discoverable via `query_capabilities`
+
+### Known Limitations
+
+- Cross-client MCP distribution not automated (manual `.mcp.json` config per client) — separate project
+- No background consolidation (write-time dedup only, no merge/summarize)
+- No session-end auto-capture hook (future enhancement)
+- Single-user, local-only (by design for MVP)
+
+### Read Order for Deliver Stage
+
+1. `docs/intent.md` — North Star
+2. `docs/discover-brief.md` — Success criteria reference
+3. `docs/design.md` — Architecture reference
+4. `src/memory_core/` — Implementation
+5. `docs/status.md` — This file
 
 ## Design Stage Handoff
 
