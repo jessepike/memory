@@ -100,6 +100,7 @@ def test_mcp_core_tool_flow(monkeypatch, tmp_path: Path) -> None:
             "archive_memory",
             "review_candidates",
             "get_stats",
+            "get_usage_report",
         }
         assert expected.issubset(tool_names)
 
@@ -207,6 +208,41 @@ def test_mcp_scope_error_contracts(monkeypatch, tmp_path: Path) -> None:
         )
         assert archive_mismatch["error_code"] == "forbidden_scope"
         assert archive_mismatch["id"] == memory_id
+
+    asyncio.run(run())
+
+
+def test_mcp_get_usage_report(monkeypatch, tmp_path: Path) -> None:
+    async def run() -> None:
+        monkeypatch.setitem(
+            sys.modules,
+            "sentence_transformers",
+            SimpleNamespace(SentenceTransformer=_FakeSentenceTransformer),
+        )
+
+        app = create_server(config_path=str(_write_test_config(tmp_path)))
+
+        # Make some calls first
+        await app.call_tool("health", {})
+        await app.call_tool(
+            "write_memory",
+            {"content": "report test", "namespace": "demo", "writer_id": "demo-agent"},
+        )
+        await app.call_tool(
+            "search_memories",
+            {"query": "report", "caller_id": "demo-agent", "namespace": "demo"},
+        )
+
+        # Now call usage report
+        raw = await app.call_tool("get_usage_report", {"days": 7, "caller_id": "demo-agent"})
+        report = _extract_payload(raw)
+
+        assert report["period_days"] == 7
+        assert report["total_calls"] >= 3  # health + write + search (at minimum)
+        assert "write_memory" in report["by_tool"]
+        assert "search_memories" in report["by_tool"]
+        assert report["empty_period"] is False
+        assert report["error_rate"] == 0.0
 
     asyncio.run(run())
 

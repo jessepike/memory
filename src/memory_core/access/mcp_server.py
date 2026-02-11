@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from memory_core.access.usage_logger import UsageLogger
+from memory_core.access.usage_reporter import UsageReporter
 from memory_core.storage.api import MemoryStorage, ScopeForbidden
 
 
@@ -40,6 +41,7 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
     memory_storage.initialize()
 
     usage_logger = UsageLogger(memory_storage.config.paths.usage_log)
+    usage_reporter = UsageReporter(memory_storage.config.paths.usage_log)
 
     app = FastMCP("memory-layer")
 
@@ -197,6 +199,17 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
     @app.tool()
     def archive_failed_memory(id: str) -> Any:
         return _run_tool(memory_storage.archive_failed_memory, id, _tool_name="archive_failed_memory")
+
+    @app.tool()
+    def get_usage_report(
+        days: int = 7,
+        namespace: str | None = None,
+        caller_id: str = "unknown",
+    ) -> Any:
+        start = time.monotonic()
+        result = usage_reporter.report(days=days, namespace=namespace)
+        usage_logger.log("get_usage_report", caller_id, namespace, (time.monotonic() - start) * 1000, "success")
+        return result
 
     @app.tool()
     def health() -> dict[str, str]:

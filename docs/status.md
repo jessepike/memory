@@ -16,7 +16,7 @@ updated: "2026-02-11"
 - [x] POST-01: Define memory routing heuristic (MCP vs auto-memory)
 - [x] POST-02: Add usage logging to MCP server (observability foundation)
 - [ ] POST-03: Add memory check/write to ADF session protocol (adoption driver)
-- [ ] POST-04: Add usage report tool (monitoring)
+- [x] POST-04: Add usage report tool (monitoring)
 - [ ] POST-05: Register in Codex and Gemini (expand reach)
 - [ ] POST-06: Weekly stats + review_candidates for first month (manual monitoring)
 - [x] Develop Step 1 — Scaffold project (`pyproject.toml`, package layout, config)
@@ -200,3 +200,4 @@ updated: "2026-02-11"
 | 2026-02-11 | Post-MVP planning. Added 6 backlog items for v1.1 Observability & Adoption (usage logging, ADF session protocol integration, usage report tool, client registration, weekly review). Pushed 3 learnings to KB (Deliver phase collapsing, Tier 2 catch rate, scope design). Identified unresolved MCP-vs-auto-memory routing concern → POST-01 + KB idea. Fastest next step: POST-03 (update global CLAUDE.md session protocol to drive adoption). |
 | 2026-02-11 | POST-01 complete. Created `docs/memory-routing.md` — cross-client routing heuristic covering Claude Code, Codex CLI, and Gemini CLI. Defines core rule ("does it matter beyond this project and client?"), decision table (10 scenarios), litmus tests, per-client guidance with system comparison tables, Memory-vs-KB boundary, prescriptive session protocol (MUST not SHOULD), and Krypton delegation option. Researched Codex/Gemini memory capabilities (Codex: AGENTS.md hierarchy + session transcripts, Gemini: GEMINI.md + `/memory add`). Added B84 to ADF backlog (cross-client memory integration spec) and B85 (retire stale B18/B19). Linked from CLAUDE.md context map. |
 | 2026-02-11 | POST-02 complete. Added usage logging to MCP server. New `UsageLogger` class writes append-only JSONL to `data/usage.jsonl`. Every `_run_tool()` call logs tool name, caller_id, namespace, duration_ms, status, and error. Fail-safe (never breaks tool calls). Added `usage_log` to `PathsConfig` and `memory_config.yaml`. 41 tests pass + 15 smoke checks. |
+| 2026-02-11 | POST-04 complete. Added `get_usage_report` MCP tool. New `UsageReporter` class reads JSONL log and computes metrics: call counts by tool/status/namespace/caller, search-to-write ratio, error rate, avg duration. Fail-safe (returns empty report on missing/corrupt file). 10 unit tests + 1 integration test. 51 tests pass, 15 tool smoke (tool_count=15). |
