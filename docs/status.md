@@ -14,7 +14,7 @@ updated: "2026-02-11"
 ## Next Steps
 
 - [x] POST-01: Define memory routing heuristic (MCP vs auto-memory)
-- [ ] POST-02: Add usage logging to MCP server (observability foundation)
+- [x] POST-02: Add usage logging to MCP server (observability foundation)
 - [ ] POST-03: Add memory check/write to ADF session protocol (adoption driver)
 - [ ] POST-04: Add usage report tool (monitoring)
 - [ ] POST-05: Register in Codex and Gemini (expand reach)
@@ -199,3 +199,4 @@ updated: "2026-02-11"
 | 2026-02-11 | Deliver stage complete. Phases 1-3: planning artifacts (manifest, capabilities, plan, tasks). Phase 4: simplified internal review + human approval. Phases 5+6 collapsed: Claude Code already registered at user scope; Codex/Gemini deferred (CLI env issues). Phase 7: Tier 1 (36/36 + smoke + stdio), Tier 2 (13/13 live scenarios), Tier 3 (Krypton cross-session test surfaced scope bug — fixed). Phase 8: success criteria mapped (10/10 met), access docs added, milestone sealed. |
 | 2026-02-11 | Post-MVP planning. Added 6 backlog items for v1.1 Observability & Adoption (usage logging, ADF session protocol integration, usage report tool, client registration, weekly review). Pushed 3 learnings to KB (Deliver phase collapsing, Tier 2 catch rate, scope design). Identified unresolved MCP-vs-auto-memory routing concern → POST-01 + KB idea. Fastest next step: POST-03 (update global CLAUDE.md session protocol to drive adoption). |
 | 2026-02-11 | POST-01 complete. Created `docs/memory-routing.md` — cross-client routing heuristic covering Claude Code, Codex CLI, and Gemini CLI. Defines core rule ("does it matter beyond this project and client?"), decision table (10 scenarios), litmus tests, per-client guidance with system comparison tables, Memory-vs-KB boundary, prescriptive session protocol (MUST not SHOULD), and Krypton delegation option. Researched Codex/Gemini memory capabilities (Codex: AGENTS.md hierarchy + session transcripts, Gemini: GEMINI.md + `/memory add`). Added B84 to ADF backlog (cross-client memory integration spec) and B85 (retire stale B18/B19). Linked from CLAUDE.md context map. |
+| 2026-02-11 | POST-02 complete. Added usage logging to MCP server. New `UsageLogger` class writes append-only JSONL to `data/usage.jsonl`. Every `_run_tool()` call logs tool name, caller_id, namespace, duration_ms, status, and error. Fail-safe (never breaks tool calls). Added `usage_log` to `PathsConfig` and `memory_config.yaml`. 41 tests pass + 15 smoke checks. |
