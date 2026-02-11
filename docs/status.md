@@ -8,8 +8,8 @@ updated: "2026-02-11"
 
 ## Current State
 
-- **Phase:** Deliver — Phase 3: Delivery Planning (complete)
-- **Focus:** Plan and tasks drafted. Ready for Phase 4 review loop.
+- **Phase:** Deliver — Phase 7: Validation (Tier 3 pending)
+- **Focus:** Tier 1+2 pass. Awaiting human manual validation. Codex/Gemini registration deferred (CLI env issues).
 
 ## Next Steps
 
