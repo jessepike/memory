@@ -8,15 +8,17 @@ updated: "2026-02-11"
 
 ## Current State
 
-- **Phase:** Deliver — Complete (Milestone Sealed)
-- **Focus:** Memory Layer MVP delivered. MCP server live in Claude Code at user scope. All success criteria met.
+- **Phase:** Post-MVP — Observability & Adoption
+- **Focus:** MVP delivered and sealed. Now: drive agent adoption, add usage logging, monitor value. See backlog POST-01 through POST-06.
 
 ## Next Steps
 
-- [x] Governance — Add required agent workflow policy (`AGENTS.md`) for backlog/tasks/status/commits
-- [x] Governance — Create explicit backlog artifact (`docs/backlog.md`) and seed current work items
-- [ ] Governance — Keep backlog/status updated every work slice and commit in regular cadence
-- [x] Human sign-off — Design accepted, transition to Develop approved
+- [ ] POST-01: Define memory routing heuristic (MCP vs auto-memory)
+- [ ] POST-02: Add usage logging to MCP server (observability foundation)
+- [ ] POST-03: Add memory check/write to ADF session protocol (adoption driver)
+- [ ] POST-04: Add usage report tool (monitoring)
+- [ ] POST-05: Register in Codex and Gemini (expand reach)
+- [ ] POST-06: Weekly stats + review_candidates for first month (manual monitoring)
 - [x] Develop Step 1 — Scaffold project (`pyproject.toml`, package layout, config)
 - [x] Develop Step 2 — Implement Pydantic models (`memory_core/models.py`)
 - [x] Develop Step 3 — Implement SQLite schema + DB layer (`memory_core/storage/schema.sql`, `db.py`)
