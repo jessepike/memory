@@ -9,7 +9,8 @@ updated: "2026-02-10"
 
 | id | priority | status | owner | description | done_when |
 |----|----------|--------|-------|-------------|-----------|
-| - | - | - | - | No active backlog items. | Add next prioritized work item before implementation resumes |
+| DEL-01 | P1 | done | agent | Phase 1 Intake & Readiness Check — verify Develop outputs | All checks pass, delivery scope understood |
+| DEL-02 | P1 | done | agent | Phase 2 Delivery Capability Assessment — manifest.md + capabilities.md | Artifacts created with registry summary |
 
 ## Todo
 
