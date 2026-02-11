@@ -9,7 +9,7 @@ updated: "2026-02-10"
 ## Current State
 
 - **Phase:** Develop — In Progress
-- **Focus:** Usage documentation is now in place with practical examples. Develop stage deliverables are implemented and documented.
+- **Focus:** Expanded test coverage with live stdio transport test and comprehensive smoke test workflows.
 
 ## Next Steps
 
@@ -110,3 +110,4 @@ updated: "2026-02-10"
 | 2026-02-10 | Completed DEV-16 documentation alignment: reconciled design wording with implemented MCP surface (core + maintenance tools), updated discover brief to mark caller-identity enforcement resolved via Design D1, and synchronized backlog/status completion state. |
 | 2026-02-10 | Completed DEV-17 usage documentation: added `docs/usage.md` covering quick start, scoping behavior, forbidden-scope contract, tool-by-tool request examples, maintenance flows, and verification commands; linked from README. |
 | 2026-02-11 | Completed DEV-18 registry integration: registered `memory-layer` as a tool capability in `/Users/jessepike/code/_shared/capabilities-registry`, regenerated `inventory.json`/`INVENTORY.md`, verified ADF `query_capabilities` discovery, and confirmed installer command generation for Codex, Claude Code, and Gemini. |
+| 2026-02-11 | Added `scripts/mcp_stdio_test.py` (live stdio JSON-RPC transport test, 7 checks) and expanded `scripts/mcp_smoke.py` with 9 new workflow checks (get_memory, update_memory, get_recent, get_session_context, review_candidates, reconcile, failed memories, cross-namespace, forbidden scope). All 36 unit tests + both scripts passing. |

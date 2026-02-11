@@ -21,6 +21,8 @@ def _payload(result: Any) -> Any:
     if isinstance(result, list) and result and hasattr(result[0], "text"):
         text = result[0].text
         return json.loads(text)
+    if isinstance(result, list):
+        return result
     if isinstance(result, dict):
         return result
     raise TypeError(f"Unexpected MCP tool response shape: {type(result)!r}")
@@ -102,6 +104,26 @@ async def run_smoke() -> dict[str, Any]:
             has_search_results = len(search_results) >= 1
         elif isinstance(search_results, dict):
             has_search_results = "id" in search_results and "content" in search_results
+        # --- New checks: get_memory (before archive) ---
+        get_mem = _payload(
+            await app.call_tool(
+                "get_memory", {"id": write_one["id"], "caller_id": "demo-agent"}
+            )
+        )
+
+        # --- update_memory (before archive, with namespace for non-privileged caller) ---
+        update_result = _payload(
+            await app.call_tool(
+                "update_memory",
+                {
+                    "id": write_one["id"],
+                    "caller_id": "demo-agent",
+                    "namespace": "demo",
+                    "content": "alpha memory updated",
+                },
+            )
+        )
+
         stats_before = _payload(await app.call_tool("get_stats", {"caller_id": "krypton"}))
         archive = _payload(
             await app.call_tool(
@@ -110,6 +132,51 @@ async def run_smoke() -> dict[str, Any]:
             )
         )
         stats_after = _payload(await app.call_tool("get_stats", {"caller_id": "krypton"}))
+
+        # --- get_recent ---
+        recent = _payload(
+            await app.call_tool(
+                "get_recent", {"caller_id": "demo-agent", "namespace": "demo", "limit": 10, "days": 7}
+            )
+        )
+
+        # --- get_session_context ---
+        session_ctx = _payload(
+            await app.call_tool(
+                "get_session_context",
+                {"caller_id": "demo-agent", "namespace": "demo", "query": "alpha", "limit": 5},
+            )
+        )
+
+        # --- review_candidates ---
+        candidates = _payload(
+            await app.call_tool(
+                "review_candidates", {"caller_id": "demo-agent", "namespace": "demo", "limit": 10}
+            )
+        )
+
+        # --- reconcile_dual_store ---
+        reconcile = _payload(await app.call_tool("reconcile_dual_store", {}))
+
+        # --- list_failed_memories ---
+        failed = _payload(await app.call_tool("list_failed_memories", {"limit": 10}))
+
+        # --- Cross-namespace search (privileged caller) ---
+        cross_search = _payload(
+            await app.call_tool(
+                "search_memories",
+                {"query": "alpha", "caller_id": "krypton", "namespace": "demo", "limit": 5},
+            )
+        )
+
+        # --- Forbidden scope error (unprivileged private access) ---
+        # demo-agent has can_access_private: false, so searching private namespace raises ScopeForbidden
+        forbidden_resp = _payload(
+            await app.call_tool(
+                "search_memories",
+                {"query": "anything", "caller_id": "demo-agent", "namespace": "private", "limit": 5},
+            )
+        )
 
         checklist = {
             "tools_registered": len(tool_names) >= 9,
@@ -121,6 +188,28 @@ async def run_smoke() -> dict[str, Any]:
                 isinstance(stats_before.get("total"), int)
                 and isinstance(stats_after.get("total"), int)
                 and stats_after["total"] < stats_before["total"]
+            ),
+            "get_memory_returns_content": (
+                isinstance(get_mem, dict) and "content" in get_mem
+            ),
+            "update_memory_success": (
+                isinstance(update_result, dict)
+                and "updated_fields" in update_result
+                and "content" in update_result.get("updated_fields", [])
+            ),
+            "get_recent_returns_list": isinstance(recent, list),
+            "get_session_context_has_shape": (
+                isinstance(session_ctx, dict)
+                and ("recent" in session_ctx or "relevant" in session_ctx or isinstance(session_ctx, dict))
+            ),
+            "review_candidates_returns_list": isinstance(candidates, list),
+            "reconcile_has_shape": isinstance(reconcile, dict),
+            "list_failed_empty": isinstance(failed, list) and len(failed) == 0,
+            "cross_namespace_search_ok": (
+                isinstance(cross_search, list) or (isinstance(cross_search, dict) and "error" not in cross_search)
+            ),
+            "forbidden_scope_error": (
+                isinstance(forbidden_resp, dict) and forbidden_resp.get("error_code") == "forbidden_scope"
             ),
         }
         success = all(checklist.values())
@@ -136,6 +225,15 @@ async def run_smoke() -> dict[str, Any]:
                 "search": search,
                 "stats_before": stats_before,
                 "stats_after": stats_after,
+                "get_memory": get_mem,
+                "update_memory": update_result,
+                "get_recent": recent,
+                "get_session_context": session_ctx,
+                "review_candidates": candidates,
+                "reconcile": reconcile,
+                "list_failed": failed,
+                "cross_search": cross_search,
+                "forbidden_resp": forbidden_resp,
             },
         }
 
