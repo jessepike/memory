@@ -21,6 +21,9 @@ updated: "2026-02-10"
 
 | id | priority | status | owner | description | done_when |
 |----|----------|--------|-------|-------------|-----------|
+| POST-01 | P1 | todo | — | Define routing heuristic between Memory Layer MCP and Claude Code auto-memory | Documented convention or enforcement mechanism that prevents duplication between the two systems |
+| POST-02 | P2 | todo | — | Add KB query to ADF session-start discipline | Agents check KB for relevant learnings before starting work; convention documented in AGENTS.md or ADF spec |
+| POST-03 | P2 | todo | — | Register memory MCP in Codex and Gemini | Codex CLI installed + registered; Gemini API key configured + registered |
 ## Done
 
 | id | priority | status | owner | description | done_when |
