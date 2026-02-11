@@ -494,8 +494,6 @@ class MemoryStorage:
             else:
                 namespaces = {requested, "global"}
         else:
-            if not profile.can_cross_scope:
-                raise self._forbidden(caller_id=caller_id, namespace=None)
             namespaces = set(allowed)
             if not profile.can_access_private:
                 namespaces.discard("private")

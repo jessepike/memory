@@ -126,12 +126,18 @@ def test_deterministic_dedup_skips_duplicate_content(tmp_path) -> None:
     assert second.similar_id == first.id
 
 
-def test_non_privileged_cross_scope_is_forbidden(tmp_path) -> None:
+def test_non_privileged_no_namespace_searches_own_scope(tmp_path) -> None:
     storage = _storage(tmp_path)
     storage.write_memory({"content": "Alpha item", "namespace": "alpha"})
 
-    with pytest.raises(ScopeForbidden):
-        storage.search_memories(query="Alpha", caller_id="alpha-agent")
+    # alpha-agent has allowed_namespaces=[alpha, global] — no-namespace search finds alpha items
+    results = storage.search_memories(query="Alpha", caller_id="alpha-agent")
+    assert len(results) == 1
+    assert results[0].namespace == "alpha"
+
+    # outsider has no profile — default allowed_namespaces=[outsider, global], can't see alpha
+    outsider_results = storage.search_memories(query="Alpha", caller_id="outsider")
+    assert outsider_results == []
 
 
 def test_update_content_rewrites_vector_and_sqlite(tmp_path) -> None:

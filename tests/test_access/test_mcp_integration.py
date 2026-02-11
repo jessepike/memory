@@ -181,9 +181,13 @@ def test_mcp_scope_error_contracts(monkeypatch, tmp_path: Path) -> None:
         )
         memory_id = write["id"]
 
-        cross_scope = _extract_payload(await app.call_tool("search_memories", {"query": "guarded", "caller_id": "demo-agent"}))
-        assert cross_scope["error_code"] == "forbidden_scope"
-        assert cross_scope["caller_id"] == "demo-agent"
+        # demo-agent has allowed_namespaces=[demo, global] — no-namespace search finds the memory
+        own_scope = _extract_payload(await app.call_tool("search_memories", {"query": "guarded", "caller_id": "demo-agent"}))
+        assert own_scope["namespace"] == "demo"
+
+        # outsider has no access to demo namespace — search returns empty
+        outsider = _extract_payload(await app.call_tool("search_memories", {"query": "guarded", "caller_id": "outsider"}))
+        assert outsider == [] or isinstance(outsider, list) and len(outsider) == 0
 
         update_missing_namespace = _extract_payload(
             await app.call_tool(
