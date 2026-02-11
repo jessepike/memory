@@ -226,3 +226,21 @@ Run full tests:
 ```bash
 python -m pytest -q
 ```
+
+## Capabilities Registry Install (Codex / Claude Code / Gemini)
+
+If you use the central capabilities registry entry (`memory-layer`), install via:
+
+```bash
+# Codex
+cd ~/code/_shared/capabilities-registry
+./scripts/install-mcp-codex.sh memory-layer --apply
+
+# Claude Code (project scope)
+./scripts/install-mcp-claude.sh memory-layer --scope project --apply
+
+# Gemini (user scope)
+./scripts/install-mcp-gemini.sh memory-layer --scope user --apply
+```
+
+Dry-run variants (without `--apply`) print exact commands before execution.

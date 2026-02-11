@@ -34,6 +34,7 @@ updated: "2026-02-10"
 - [x] Develop Step 15 — Packaging/dev setup command docs + bootstrap verification
 - [x] Develop Step 16 — Final docs consistency alignment (design/brief/status/backlog)
 - [x] Develop Step 17 — Practical usage guide (`docs/usage.md`) with tool-by-tool examples
+- [x] Develop Step 18 — Capabilities registry registration + cross-client installer verification
 
 ## Pending Decisions
 
@@ -108,3 +109,4 @@ updated: "2026-02-10"
 | 2026-02-10 | Completed DEV-15 packaging/bootstrap verification: updated README with concrete setup/dev/test/smoke/server commands, then validated in fresh `/tmp` venv using editable install (`pip install -e .[dev]`), full pytest pass, and smoke success (`tool_count=14`, `success=true`). |
 | 2026-02-10 | Completed DEV-16 documentation alignment: reconciled design wording with implemented MCP surface (core + maintenance tools), updated discover brief to mark caller-identity enforcement resolved via Design D1, and synchronized backlog/status completion state. |
 | 2026-02-10 | Completed DEV-17 usage documentation: added `docs/usage.md` covering quick start, scoping behavior, forbidden-scope contract, tool-by-tool request examples, maintenance flows, and verification commands; linked from README. |
+| 2026-02-11 | Completed DEV-18 registry integration: registered `memory-layer` as a tool capability in `/Users/jessepike/code/_shared/capabilities-registry`, regenerated `inventory.json`/`INVENTORY.md`, verified ADF `query_capabilities` discovery, and confirmed installer command generation for Codex, Claude Code, and Gemini. |
