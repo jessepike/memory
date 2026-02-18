@@ -185,20 +185,20 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
         return _run_tool(memory_storage.get_stats, caller_id=caller_id, namespace=namespace, _tool_name="get_stats", _caller_id=caller_id, _namespace=namespace)
 
     @app.tool()
-    def reconcile_dual_store() -> Any:
-        return _run_tool(memory_storage.reconcile_dual_store, _tool_name="reconcile_dual_store")
+    def reconcile_dual_store(caller_id: str = "unknown") -> Any:
+        return _run_tool(memory_storage.reconcile_dual_store, _tool_name="reconcile_dual_store", _caller_id=caller_id)
 
     @app.tool()
-    def list_failed_memories(limit: int = 100, older_than_days: int | None = None) -> Any:
-        return _run_tool(memory_storage.list_failed_memories, limit=limit, older_than_days=older_than_days, _tool_name="list_failed_memories")
+    def list_failed_memories(limit: int = 100, older_than_days: int | None = None, caller_id: str = "unknown") -> Any:
+        return _run_tool(memory_storage.list_failed_memories, limit=limit, older_than_days=older_than_days, _tool_name="list_failed_memories", _caller_id=caller_id)
 
     @app.tool()
-    def retry_failed_memory(id: str) -> Any:
-        return _run_tool(memory_storage.retry_failed_memory, id, _tool_name="retry_failed_memory")
+    def retry_failed_memory(id: str, caller_id: str = "unknown") -> Any:
+        return _run_tool(memory_storage.retry_failed_memory, id, _tool_name="retry_failed_memory", _caller_id=caller_id)
 
     @app.tool()
-    def archive_failed_memory(id: str) -> Any:
-        return _run_tool(memory_storage.archive_failed_memory, id, _tool_name="archive_failed_memory")
+    def archive_failed_memory(id: str, caller_id: str = "unknown") -> Any:
+        return _run_tool(memory_storage.archive_failed_memory, id, _tool_name="archive_failed_memory", _caller_id=caller_id)
 
     @app.tool()
     def get_usage_report(
@@ -212,10 +212,10 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
         return result
 
     @app.tool()
-    def health() -> dict[str, str]:
+    def health(caller_id: str = "unknown") -> dict[str, str]:
         start = time.monotonic()
         result = {"status": "ok"}
-        usage_logger.log("health", "unknown", None, (time.monotonic() - start) * 1000, "success")
+        usage_logger.log("health", caller_id, None, (time.monotonic() - start) * 1000, "success")
         return result
 
     return app
