@@ -8,8 +8,8 @@ updated: "2026-02-19"
 
 ## Current State
 
-- **Phase:** Design review complete. Ready for implementation.
-- **Focus:** Implement Phase 1 (episodic log foundation) from `docs/design-capture-governance.md`.
+- **Phase:** Design finalized. Ready for Phase 1 implementation.
+- **Focus:** Implement Phase 1 (episodic log foundation) from `docs/design-capture-governance.md` Section 8.
 
 ## Next Steps
 
@@ -211,4 +211,4 @@ updated: "2026-02-19"
 | 2026-02-11 | POST-04 complete. Added `get_usage_report` MCP tool. New `UsageReporter` class reads JSONL log and computes metrics: call counts by tool/status/namespace/caller, search-to-write ratio, error rate, avg duration. Fail-safe (returns empty report on missing/corrupt file). 10 unit tests + 1 integration test. 51 tests pass, 15 tool smoke (tool_count=15). |
 | 2026-02-19 | Validation session. Missing client_profiles identified as root cause. FIX-01/02 backlogged. 4 docs + 3 diagrams created. Capture problem documented. |
 | 2026-02-19 | FIX-01/02 resolved. Hook research (3 clients). Design doc written. 5 KB entries. KB cross-checked. |
-| 2026-02-20 | Design review complete. 11 issues resolved (1 Critical, 3 High, 7 Medium). 6 rejected. |
+| 2026-02-20 | Design review + session lifecycle. 14 issues resolved. /handoff + briefing pattern added. |
