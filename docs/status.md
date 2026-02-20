@@ -1,17 +1,24 @@
 ---
 project: "Memory Layer"
 stage: "Deliver"
-updated: "2026-02-11"
+updated: "2026-02-19"
 ---
 
 # Status
 
 ## Current State
 
-- **Phase:** Feature-complete
-- **Focus:** All memory-layer code work done. 15 MCP tools, 51 tests, full smoke suite. Remaining cross-cutting concerns moved to owning projects (capabilities-registry CR-10, Krypton B17, ADF B86).
+- **Phase:** Post-validation review. Two critical bugs found and backlogged (FIX-01, FIX-02). Architecture and research synthesis complete. Capture problem identified as next major work.
+- **Focus:** Fix client_profiles config (root cause of system not working), then build Memory Capture Automation — the hooks-based layer that makes agents actually use the system.
 
 ## Next Steps
+
+- [x] **FIX-01 (P0):** Add `client_profiles` to `config/memory_config.yaml` — profiles for claude-code, krypton, adf.
+- [x] **FIX-02 (P0):** Fix `scripts/mcp_stdio_test.py` line 121 — tool count assertion (14→15).
+- [ ] **Research:** Claude Code PreCompact + Stop hook capabilities — can hooks call MCP tools? What context do they receive? What can be injected into the compaction prompt? This gates the capture automation project. See `docs/capture-problem.md`.
+- [ ] **New project: Memory Capture Automation** — PreCompact hook (extract learnings before context loss) + Stop hook (episodic session summary) + episodic tier (`data/episodes/`) + `quick_memory()` low-friction wrapper. Do research first. See `docs/capture-problem.md`.
+- [ ] **Hybrid search (FTS5/BM25):** Add SQLite FTS5 keyword search alongside Chroma vector search in `search_memories`. 70/30 fusion. Low-cost, high-value for technical content. See `docs/research-synthesis.md`.
+- [ ] **Citation tracking:** Add optional `source_ref` field to `write_memory`. No behavior change now; unlocks JIT verification and staleness detection later.
 
 - [x] POST-01: Define memory routing heuristic (MCP vs auto-memory)
 - [x] POST-02: Add usage logging to MCP server (observability foundation)
@@ -201,3 +208,4 @@ updated: "2026-02-11"
 | 2026-02-11 | POST-01 complete. Created `docs/memory-routing.md` — cross-client routing heuristic covering Claude Code, Codex CLI, and Gemini CLI. Defines core rule ("does it matter beyond this project and client?"), decision table (10 scenarios), litmus tests, per-client guidance with system comparison tables, Memory-vs-KB boundary, prescriptive session protocol (MUST not SHOULD), and Krypton delegation option. Researched Codex/Gemini memory capabilities (Codex: AGENTS.md hierarchy + session transcripts, Gemini: GEMINI.md + `/memory add`). Added B84 to ADF backlog (cross-client memory integration spec) and B85 (retire stale B18/B19). Linked from CLAUDE.md context map. |
 | 2026-02-11 | POST-02 complete. Added usage logging to MCP server. New `UsageLogger` class writes append-only JSONL to `data/usage.jsonl`. Every `_run_tool()` call logs tool name, caller_id, namespace, duration_ms, status, and error. Fail-safe (never breaks tool calls). Added `usage_log` to `PathsConfig` and `memory_config.yaml`. 41 tests pass + 15 smoke checks. |
 | 2026-02-11 | POST-04 complete. Added `get_usage_report` MCP tool. New `UsageReporter` class reads JSONL log and computes metrics: call counts by tool/status/namespace/caller, search-to-write ratio, error rate, avg duration. Fail-safe (returns empty report on missing/corrupt file). 10 unit tests + 1 integration test. 51 tests pass, 15 tool smoke (tool_count=15). |
+| 2026-02-19 | Validation session. Missing client_profiles identified as root cause. FIX-01/02 backlogged. 4 docs + 3 diagrams created. Capture problem documented. |

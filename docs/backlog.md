@@ -1,6 +1,6 @@
 ---
 project: "Memory Layer"
-updated: "2026-02-10"
+updated: "2026-02-19"
 ---
 
 # Backlog
@@ -21,6 +21,8 @@ updated: "2026-02-10"
 
 | id | priority | status | owner | description | done_when |
 |----|----------|--------|-------|-------------|-----------|
+| FIX-01 | P0 | done | agent | Add `client_profiles` to production config — root cause of scope narrowing | `memory_config.yaml` has profiles for claude-code, krypton, adf; callers can retrieve memories from their project namespaces |
+| FIX-02 | P0 | done | agent | Fix stdio transport test stale tool count (14→15) | `scripts/mcp_stdio_test.py` passes with `success=true` |
 | POST-02 | P1 | done | agent | Add usage logging to MCP server | Every tool call logs caller_id, tool name, namespace, timestamp to append-only store. Foundation for all observability. |
 | POST-03 | P1 | moved | — | Codify multi-system session protocol in ADF spec + global CLAUDE.md → **moved to ADF B86** | Touches ADF repo, not memory-layer. Tracked at `~/code/_shared/adf/BACKLOG.md#B86`. |
 | POST-04 | P2 | done | agent | Add usage report tool (`get_usage_report`) | MCP tool or script that reports: memories written/searched this period, search-to-write ratio, active namespaces, dedup rate, empty searches (gap signal) |
