@@ -3,7 +3,7 @@
 > **Project:** Memory Layer v1.1
 > **Stage:** Design (pending review)
 > **Created:** 2026-02-19
-> **Status:** Draft — awaiting internal + external review
+> **Status:** Review complete — internal + external (Gemini, GPT). 11 issues resolved.
 
 ---
 
@@ -74,7 +74,7 @@ Secondary problem: no audit trail. When agents make decisions based on memories,
 
 Reference implementations: Langfuse (trace/observation/session model), PROV-AGENT/Flowcept (W3C PROV for MCP agents), SQLite hash chain pattern (15 lines of SQL for tamper-evident chaining).
 
-Regulatory relevance: EU AI Act Article 12 (automatic recording of events for traceability), NIST AI RMF (governance functions require audit trails). Both mandate that high-risk AI systems maintain traceable decision records. Agentic coding assistants making architectural decisions are approaching this threshold.
+Regulatory context (for awareness, not compliance): EU AI Act Article 12 and NIST AI RMF both require traceable decision records for high-risk AI systems. v1.1 builds foundational primitives (append-only log, hash chains, agent identity) that are prerequisites for future compliance — not a compliance solution itself.
 
 ---
 
@@ -83,7 +83,7 @@ Regulatory relevance: EU AI Act Article 12 (automatic recording of events for tr
 ### 3.1 Design Principles
 
 1. **Capture broadly, route later** — don't force routing decisions at capture time
-2. **MCP-first** — every capability must work through MCP (the universal channel)
+2. **MCP-first** — every capability must work through MCP (the universal channel). Exception: SessionEnd shell hooks may use the Python storage API directly (same validation, no MCP transport overhead)
 3. **No inline noise** — capture must not interrupt or slow down the conversation
 4. **Append-only by default** — episodic events are immutable once written
 5. **Schema from day one** — hash chains, agent_id, schema_version from the first event
@@ -132,9 +132,9 @@ At session end, if you learned something that matters beyond this project:
 - Don't announce it to the user. Just do it.
 ```
 
-This is imperfect (agents forget under pressure) but it's zero-infrastructure, works everywhere, and produces zero noise when it fires.
+This is imperfect (agents forget under pressure) but it's zero-infrastructure, works everywhere, and produces zero noise when it fires. "Don't announce it" means don't interrupt the user's flow — not covert capture. The user installs and configures the system (explicit opt-in).
 
-**Reliability estimate:** 40-60% of sessions. Sufficient as a baseline, not as sole mechanism.
+**Reliability estimate:** 40-60% of sessions. This is the minimum viable capture mechanism, not as sole mechanism. Hooks are the reliability enhancement layer where available.
 
 #### Claude Code: SessionEnd Transcript Post-Processing
 
@@ -142,14 +142,14 @@ This is imperfect (agents forget under pressure) but it's zero-infrastructure, w
 Hook: SessionEnd (shell command)
 Trigger: Every session end
 Action: Python script reads transcript_path, extracts learnings
-Output: Calls write_episode via MCP (or direct SQLite append)
+Output: Writes episodes via EpisodeStorage Python API (same validation as MCP path)
 Visibility: None — runs after session ends
 ```
 
 Why SessionEnd over Stop:
 - **Stop** fires at end of each turn, can block response, triggers loop-guard complexity
 - **SessionEnd** fires once at session close, non-blocking, guaranteed cleanup phase
-- SessionEnd can only run shell commands (no agent hooks), but a shell script can invoke a Python extractor that writes directly to SQLite — no MCP needed
+- SessionEnd can only run shell commands (no agent hooks), but a shell script can invoke the Python `EpisodeStorage` class directly — same validation and hash chaining as the MCP path, just without MCP transport overhead
 
 Why not PreCompact:
 - PreCompact **cannot call MCP tools** (shell only)
@@ -196,10 +196,26 @@ Trade-off: we lose human-readability of JSONL. Mitigated by providing a `get_epi
 ### 4.2 Schema
 
 ```sql
+-- Session lifecycle tracking (chain head, sequence counter)
+CREATE TABLE sessions (
+    session_id TEXT PRIMARY KEY,
+    start_ts TEXT NOT NULL,             -- ISO 8601
+    end_ts TEXT,                        -- NULL until ended
+    creator TEXT NOT NULL,              -- agent_id that started the session
+    client TEXT,                        -- claude-code | codex | gemini | krypton
+    project TEXT,                       -- Project context
+    namespace TEXT NOT NULL,            -- Scope for access control
+    finalized INTEGER DEFAULT 0,       -- 0 = open, 1 = ended
+    last_sequence INTEGER DEFAULT 0,   -- Current sequence counter
+    chain_head TEXT,                    -- event_hash of last episode (chain tip)
+    metadata TEXT,                      -- JSON blob
+    schema_version INTEGER DEFAULT 1
+);
+
 CREATE TABLE episodes (
     -- Identity
     id TEXT PRIMARY KEY,                -- UUID4
-    session_id TEXT NOT NULL,           -- Groups events into sessions
+    session_id TEXT NOT NULL REFERENCES sessions(session_id),
     sequence INTEGER NOT NULL,          -- Monotonic within session
 
     -- Temporal
@@ -224,7 +240,7 @@ CREATE TABLE episodes (
 
     -- Integrity (governance-critical)
     event_hash TEXT NOT NULL,           -- SHA-256 of (previous_hash + content fields)
-    previous_hash TEXT,                 -- Hash of prior event (NULL for first event)
+    previous_hash TEXT,                 -- Hash of prior event in session (NULL for first)
 
     -- Versioning (governance-critical)
     schema_version INTEGER DEFAULT 1,
@@ -241,16 +257,20 @@ CREATE INDEX idx_episodes_type ON episodes(event_type);
 CREATE INDEX idx_episodes_agent ON episodes(agent_id);
 ```
 
+**Sessions table rationale:** Tracks chain heads and sequence counters atomically. Prevents concurrent append races by updating `last_sequence` and `chain_head` within the same transaction as the episode insert. Also enables detecting stale/unclosed sessions (finalized=0 with no recent events).
+
 ### 4.3 Hash Chaining
 
-Every event includes a cryptographic hash linking it to its predecessor:
+**Scope: per-session chains.** Each session has an independent hash chain. Events within a session are linked; sessions are independent. This avoids global contention across concurrent sessions while maintaining per-session tamper detection.
+
+Every event includes a cryptographic hash linking it to its predecessor *within the same session*:
 
 ```python
 import hashlib, json
 
 def compute_event_hash(event: dict, previous_hash: str | None) -> str:
-    """Tamper-evident hash chain. If any event is modified or deleted,
-    all subsequent hashes become invalid."""
+    """Tamper-evident hash chain (per-session). If any event is modified
+    or deleted, all subsequent hashes in that session become invalid."""
     payload = json.dumps({
         "previous_hash": previous_hash,
         "id": event["id"],
@@ -264,14 +284,65 @@ def compute_event_hash(event: dict, previous_hash: str | None) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 ```
 
-This is the "15 lines of SQL" pattern from the research. Cost: one SHA-256 per event (~1 microsecond). Value: any modification to any event breaks all subsequent hashes — immediately detectable by a simple chain-walk verification.
+**Atomic append protocol:**
+
+```python
+# Within a single SQLite transaction (BEGIN IMMEDIATE):
+# 1. Read session.last_sequence and session.chain_head
+# 2. Compute new_sequence = last_sequence + 1
+# 3. Compute event_hash = compute_event_hash(event, chain_head)
+# 4. INSERT episode with sequence=new_sequence, previous_hash=chain_head
+# 5. UPDATE sessions SET last_sequence=new_sequence, chain_head=event_hash
+# 6. COMMIT
+#
+# BEGIN IMMEDIATE ensures write-serialization — concurrent writers
+# on the same session will queue, not race.
+```
+
+Cost: one SHA-256 per event (~1 microsecond) + one atomic transaction. Value: any modification to any event breaks all subsequent hashes within that session — immediately detectable by a simple chain-walk verification.
 
 **What this enables later (not now):**
 - Cryptographic signing (agent private keys sign event_hash)
-- Merkle tree roots for periodic attestation
+- Merkle tree roots for periodic attestation (hash session chain_heads together)
 - Third-party audit verification
 
-### 4.4 Event Type Taxonomy
+### 4.4 Data Models
+
+```python
+class SessionRecord(BaseModel):
+    session_id: str
+    start_ts: str                       # ISO 8601
+    end_ts: str | None = None
+    creator: str                        # agent_id
+    client: str | None = None
+    project: str | None = None
+    namespace: str = "global"
+    finalized: bool = False
+    last_sequence: int = 0
+    chain_head: str | None = None       # event_hash of last episode
+    metadata: dict | None = None
+    schema_version: int = 1
+
+class EpisodicEvent(BaseModel):
+    id: str                             # UUID4
+    session_id: str
+    sequence: int
+    timestamp: str                      # ISO 8601
+    event_type: str                     # See taxonomy below
+    severity: str = "info"              # info | warning | error | critical
+    agent_id: str
+    client: str | None = None
+    project: str | None = None
+    namespace: str = "global"
+    content: str                        # What happened (one sentence preferred)
+    metadata: dict | None = None
+    source_ref: str | None = None       # File path, commit SHA, transcript ref
+    event_hash: str                     # SHA-256 (computed, not caller-provided)
+    previous_hash: str | None = None    # Chain link (computed, not caller-provided)
+    schema_version: int = 1
+```
+
+### 4.5 Event Type Taxonomy (unchanged from draft)
 
 | Event Type | Description | Example |
 |------------|-------------|---------|
@@ -284,7 +355,7 @@ This is the "15 lines of SQL" pattern from the research. Cost: one SHA-256 per e
 | `milestone` | Significant checkpoint | "51 tests pass, 15 smoke, 7 stdio — all green" |
 | `reflection` | Meta-cognitive assessment | "Instruction-driven capture is unreliable as sole mechanism" |
 
-### 4.5 MCP Tools
+### 4.6 MCP Tools
 
 Three new tools exposed through the existing MCP server:
 
@@ -302,11 +373,11 @@ Three new tools exposed through the existing MCP server:
 ```
 
 Minimal required fields: `content`, `event_type`, `agent_id`. Everything else defaults:
-- `session_id` → auto-generated from date + sequence if not provided
+- `session_id` → auto-generated from date + counter if not provided. If the session doesn't exist in the `sessions` table, it is auto-created (INSERT into sessions with start_ts=now, creator=agent_id).
 - `project` → inferred from namespace or left null
-- `sequence` → auto-incremented within session
+- `sequence` → atomically allocated: `sessions.last_sequence + 1`, updated within the same transaction as the episode insert (see atomic append protocol in 4.3)
 - `timestamp` → now
-- `event_hash` + `previous_hash` → computed automatically
+- `event_hash` + `previous_hash` → computed automatically from session's `chain_head`
 - `namespace` → caller's default namespace
 
 #### `get_episodes`
@@ -337,7 +408,7 @@ Explicitly close a session. Writes a `session_end` event and optionally triggers
 }
 ```
 
-### 4.6 Relationship to Existing Systems
+### 4.7 Relationship to Existing Systems
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -394,25 +465,26 @@ The usage log (`data/usage.jsonl`) becomes a third leg:
 | Usage log → SQLite migration | Current JSONL exists | Unified queryable audit surface |
 | Formal decision records | Episode schema | Traceable architectural decisions |
 
-### 5.3 Enterprise Path
+### 5.3 Future Path
 
-The progression from personal to enterprise:
+v1.1 builds foundational primitives — not a governance solution. The value is keeping the enterprise path *open* at near-zero cost:
 
 ```
 v1.0 (current)     → Semantic memory only, no audit trail
 v1.1 (this design) → + Episodic log (hash-chained, append-only)
                      + Cross-client capture (instruction + hooks)
                      + source_ref (provenance links)
+                     [Primitives only — no compliance claims]
 v1.2               → + Trust scoring per agent/source
                      + LLM extraction pipeline (episode → memory)
                      + Chain verification + attestation reports
-v2.0               → + Cryptographic signing (agent keys)
+v2.0 (if needed)   → + Cryptographic signing (agent keys)
                      + Multi-party verification
-                     + Compliance framework alignment (SOC2, AI Act Art. 12)
+                     + Compliance alignment (SOC2, AI Act Art. 12)
                      + Role-based access control
 ```
 
-Each step builds on the previous. Nothing in v1.1 closes off any v2.0 capability. The critical investment is the schema — hash chains, agent_id, schema_version, append-only discipline.
+Nothing in v1.1 closes off any v2.0 capability. The critical investment is the schema — hash chains, agent_id, schema_version, append-only discipline. Achieving actual regulatory compliance would require significant additional work (signing, access governance, attestation, auditor-facing tooling) well beyond v1.1 scope.
 
 ---
 
@@ -462,6 +534,14 @@ Each step builds on the previous. Nothing in v1.1 closes off any v2.0 capability
 
 **Rationale:** Reuse existing access control. An agent that can read `memory-layer` namespace memories can also read `memory-layer` namespace episodes.
 
+**Note:** Episode namespace represents the project context where the activity occurred, which pragmatically maps to the same namespace used for semantic memories. This reuse is a v1.1 simplification — episodes are activity records (not knowledge), and future versions may introduce separate episode-specific access policies.
+
+### D7: Per-session hash chains
+
+**Chosen:** Each session has an independent hash chain. The `previous_hash` field links to the prior event *within the same session*, not globally.
+
+**Rationale:** Sessions are independent units of work. A global chain would create ordering dependencies across unrelated sessions and complicate concurrent multi-client usage. Per-session chains provide the same tamper-detection guarantee within each session without cross-session contention. Future cross-session integrity (e.g., Merkle roots over all session chain_heads) can layer on top.
+
 ---
 
 ## 7. Open Questions for Review
@@ -480,6 +560,8 @@ The SessionEnd hook fires a Python script. That script needs to:
 Should extraction use (a) heuristic keyword matching (fast, cheap, misses novel patterns), (b) LLM-based extraction (better quality, costs API calls), or (c) structured section parsing (if transcript has consistent format)?
 
 **Recommendation:** Start with (c) — parse transcript structure (tool calls, final messages) without LLM. Graduate to (b) in v1.2 when we have data on what patterns matter.
+
+**Fallback behavior:** When structured parsing produces zero episodes from a transcript, the extractor should log a `session_end` event with `metadata.extraction_result: "no_episodes_extracted"` so we can measure parsing failures. No silent drops — every SessionEnd hook invocation must produce at least one event (the session record itself). This ensures measurement of capture rate vs extraction success rate.
 
 ### Q3: Episode retention and archival
 
@@ -501,26 +583,28 @@ Instruction-driven capture is estimated at 40-60% compliance. How do we measure 
 
 ## 8. Implementation Plan
 
-### Phase 1: Episodic Log Foundation
+**Phase 1 is the standalone MVP.** It delivers a working episodic log with MCP tools. Phases 2-4 can ship independently and are not required for Phase 1 to be useful.
 
-1. Add `episodes` table to SQLite schema (schema.sql, db.py)
-2. Implement hash chaining (compute_event_hash utility)
-3. Add EpisodicEvent Pydantic model
-4. Implement episode storage API (write, query, verify chain)
+### Phase 1: Episodic Log Foundation (MVP — ship independently)
+
+1. Add `sessions` + `episodes` tables to SQLite schema (schema.sql, db.py)
+2. Implement per-session hash chaining (compute_event_hash utility)
+3. Add SessionRecord + EpisodicEvent Pydantic models
+4. Implement episode storage API (write with atomic append, query, verify chain)
 5. Add MCP tools: `write_episode`, `get_episodes`, `end_session`
-6. Tests: schema, hash chaining, episode CRUD, MCP integration
+6. Tests: schema, hash chaining, atomic sequence, episode CRUD, MCP integration
 
-### Phase 2: Cross-Client Capture
+### Phase 2: Cross-Client Capture (Claude Code first)
 
 7. Update CLAUDE.md session protocol with `write_episode` instructions
-8. Create Claude Code SessionEnd hook (shell → Python extractor)
-9. Create Gemini CLI extension (SessionEnd hook + MCP config)
+8. Create Claude Code SessionEnd hook (shell → Python extractor using EpisodeStorage API)
+9. Create transcript extraction script (structured parsing with fallback logging)
 10. Update AGENTS.md (Codex) with `write_episode` instructions
-11. Create transcript extraction script (structured parsing)
+11. Gemini CLI extension (SessionEnd hook + MCP config) — deferred if stalls
 
 ### Phase 3: Governance Utilities
 
-12. Add `verify_chain` MCP tool (walk hash chain, report integrity)
+12. Add `verify_chain` MCP tool (walk per-session hash chain, report integrity)
 13. Add `source_ref` field to `write_memory` (backlog item — connects semantic to episodic)
 14. Update `get_usage_report` to include episode stats
 15. Documentation: usage guide for episodic tools
@@ -532,24 +616,89 @@ Instruction-driven capture is estimated at 40-60% compliance. How do we measure 
 18. Assess signal quality of extracted episodes
 19. Decide on LLM-based extraction (v1.2) based on data
 
+### Privacy
+
+- **Opt-in by design:** Hook-based capture requires explicit hook installation (user adds SessionEnd hook to their config). No capture occurs without this step.
+- **Single-user local-only:** All data stays on the user's machine. No external transmission.
+- **PII filtering:** Not implemented in v1.1. Recommended for v1.2: configurable content filters before episode write (regex patterns for secrets, credentials, personal data).
+- **No encryption at rest in v1.1.** Relies on filesystem permissions and disk encryption (standard for local SQLite). Encryption at rest is a v2.0 consideration.
+
 ---
 
 ## 9. Success Criteria
 
+### Automated (Phase 1 gate — must pass before shipping)
+
 | # | Criterion | Measurement |
 |---|-----------|-------------|
-| 1 | Episodes table exists with hash chaining | Schema deployed, chain verification passes |
-| 2 | write_episode / get_episodes / end_session MCP tools work | Smoke test + stdio test pass |
-| 3 | Claude Code SessionEnd hook captures episodes | Run 5 sessions, check episode count > 0 |
-| 4 | System prompt instructions work for all 3 clients | Test with Claude, Codex, Gemini — each writes at least 1 episode |
-| 5 | Hash chain integrity holds across 100+ events | verify_chain returns clean for full chain |
-| 6 | No user-visible noise during normal operation | Hooks run silently, no screen output |
-| 7 | Episodes are queryable by session, project, time range | get_episodes returns correct filtered results |
-| 8 | Existing semantic memory functionality unchanged | All 51 existing tests still pass |
+| 1 | Sessions + episodes tables exist with per-session hash chaining | Schema deployed, chain verification passes on test data |
+| 2 | write_episode / get_episodes / end_session MCP tools work | Smoke test + stdio test pass (tool_count updated) |
+| 3 | Hash chain integrity holds across 100+ events in 5+ sessions | verify_chain returns clean for all session chains |
+| 4 | Episodes are queryable by session, project, time range, event_type | get_episodes returns correct filtered results (unit tests) |
+| 5 | Atomic sequence allocation prevents gaps/duplicates | Concurrent write test produces monotonic sequences per session |
+| 6 | Existing semantic memory functionality unchanged | All 51 existing tests still pass |
+
+### Manual verification (Phase 2 — post-deployment)
+
+| # | Criterion | Measurement |
+|---|-----------|-------------|
+| 7 | Claude Code SessionEnd hook captures episodes | Run 5 sessions, check episode count > 0 for each |
+| 8 | Instruction-driven capture works for at least Claude Code | Agent writes ≥1 episode via instruction in 3/5 test sessions |
+| 9 | No user-visible noise during normal operation | Hooks produce no stderr/stdout visible to user |
 
 ---
 
-## 10. Sources
+## 10. Issue Log
+
+| # | Issue | Source | Severity | Status | Resolution |
+|---|-------|--------|----------|--------|------------|
+| 1 | Hash chain scope undefined — global vs per-session | Internal + Gemini + GPT | Critical | Resolved | Specified per-session chains (D7). Added sessions table with chain_head. Added atomic append protocol. |
+| 2 | Sequence assignment unspecified — no atomic allocation | Internal + Gemini + GPT | High | Resolved | Defined transactional MAX(sequence)+1 via sessions.last_sequence. BEGIN IMMEDIATE for serialization. |
+| 3 | No sessions table for chain heads and lifecycle | GPT + Gemini | High | Resolved | Added sessions table with session_id, start_ts, end_ts, chain_head, last_sequence, finalized. |
+| 4 | SessionEnd hook bypasses MCP — contradicts MCP-first principle | Internal + Gemini | High | Resolved | Clarified: hook uses Python EpisodeStorage API directly (same validation, no MCP transport). Updated principle 3.1#2. |
+| 5 | Governance claims overstate v1.1 capabilities | Internal + Gemini + GPT | Medium | Resolved | Softened language. Positioned as "foundational primitives" not governance solution. Added explicit gap acknowledgment. |
+| 6 | Privacy/consent missing — immutable log needs opt-in context | GPT | Medium | Resolved | Added Privacy section. Hook install = explicit opt-in. PII filtering deferred to v1.2. |
+| 7 | Episode namespace semantics unclear | Internal | Medium | Resolved | Added note to D6: namespace = project context, reusing auth for v1.1 simplicity. |
+| 8 | EpisodicEvent Pydantic model not specified | Internal | Medium | Resolved | Added SessionRecord + EpisodicEvent models in Section 4.4. |
+| 9 | Success criteria 3/4 not automatable | Internal + GPT | Medium | Resolved | Split criteria into Automated (Phase 1 gate) vs Manual verification (Phase 2). Added concurrent write test. |
+| 10 | Scope phasing needs reinforcement | GPT | Medium | Resolved | Marked Phase 1 as standalone MVP. Phase 2+ ships independently. Gemini deferred if stalls. |
+| 11 | Q2 extraction fallback behavior missing | Gemini + GPT | Medium | Resolved | Added fallback: zero-episode extraction still logs session_end event with extraction metadata. |
+| — | Review complete — internal + external (Gemini, GPT; Kimi timed out) | — | — | Complete | 11 accepted, 6 rejected. |
+
+### Rejected Issues
+
+| Issue | Source | Reason |
+|-------|--------|--------|
+| agent_id spoofable via client payload | GPT | Single-user trusted-local model, same trust assumptions as v1.0 semantic memory |
+| Event type taxonomy too broad | Gemini | Intentionally broad; metadata JSON handles sub-type specifics |
+| DoS/rate limiting for automated writes | GPT | Single-user local system — no external attack surface |
+| source_ref format undefined | Gemini + GPT | Optional field; format will emerge from usage patterns |
+| Schema versioning migration strategy | Gemini | Implementation detail; v1.1 is first version of episodes schema |
+| Usage JSONL migration plan needed now | GPT | Already addressed in Q1 — deferred to v1.2 |
+
+## 11. Review Log
+
+### Internal Review
+
+**Date:** 2026-02-20
+**Mechanism:** Manual cross-reference against discover-brief.md, design.md, intent.md, and MCP memories
+**Issues Found:** 3 High, 3 Medium, 2 Low
+**Key Findings:**
+- Hash chain scope and atomic append were the critical gaps
+- SessionEnd hook / MCP-first contradiction needed resolution
+- Episode namespace semantics needed clarification vs memory namespace
+
+### External Review
+
+**Date:** 2026-02-20
+**Models:** Gemini 2.5 Flash Lite (success), GPT-5 Mini (success), Kimi K2.5 (timed out)
+**Issues Raised:** 27 total across 2 models (12 Gemini, 15 GPT)
+**Accepted:** 11 (after dedup with internal findings)
+**Rejected:** 6 (single-user scope, implementation details, already addressed)
+
+---
+
+## 12. Sources
 
 ### Hook Capabilities
 - Claude Code Hooks Reference — events, execution model, async support, decision control

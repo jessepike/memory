@@ -8,15 +8,15 @@ updated: "2026-02-19"
 
 ## Current State
 
-- **Phase:** Design review pending. FIX-01/02 resolved. Research complete. Design doc ready.
-- **Focus:** Run `docs/design-capture-governance.md` through internal + external review, then implement.
+- **Phase:** Design review complete. Ready for implementation.
+- **Focus:** Implement Phase 1 (episodic log foundation) from `docs/design-capture-governance.md`.
 
 ## Next Steps
 
 - [x] **FIX-01 (P0):** Add `client_profiles` to `config/memory_config.yaml` — profiles for claude-code, krypton, adf.
 - [x] **FIX-02 (P0):** Fix `scripts/mcp_stdio_test.py` line 121 — tool count assertion (14→15).
 - [x] **Research:** Hook capabilities for Claude Code, Codex CLI, Gemini CLI. PreCompact can't call MCP tools. SessionEnd is best capture point. Codex has no hooks at all.
-- [ ] **Design review:** `docs/design-capture-governance.md` — cross-client capture + episodic log + governance. Needs internal + external review.
+- [x] **Design review:** `docs/design-capture-governance.md` — internal + external (Gemini, GPT). 11 issues resolved.
 - [ ] **Implement v1.1:** Episodic log (SQLite, hash-chained), write_episode/get_episodes/end_session MCP tools, SessionEnd hooks, system prompt updates.
 - [ ] **Hybrid search (FTS5/BM25):** Add SQLite FTS5 keyword search alongside Chroma vector search in `search_memories`. 70/30 fusion. Low-cost, high-value for technical content. See `docs/research-synthesis.md`.
 - [ ] **Citation tracking:** Add optional `source_ref` field to `write_memory`. No behavior change now; unlocks JIT verification and staleness detection later.
@@ -211,3 +211,4 @@ updated: "2026-02-19"
 | 2026-02-11 | POST-04 complete. Added `get_usage_report` MCP tool. New `UsageReporter` class reads JSONL log and computes metrics: call counts by tool/status/namespace/caller, search-to-write ratio, error rate, avg duration. Fail-safe (returns empty report on missing/corrupt file). 10 unit tests + 1 integration test. 51 tests pass, 15 tool smoke (tool_count=15). |
 | 2026-02-19 | Validation session. Missing client_profiles identified as root cause. FIX-01/02 backlogged. 4 docs + 3 diagrams created. Capture problem documented. |
 | 2026-02-19 | FIX-01/02 resolved. Hook research (3 clients). Design doc written. 5 KB entries. KB cross-checked. |
+| 2026-02-20 | Design review complete. 11 issues resolved (1 Critical, 3 High, 7 Medium). 6 rejected. |
