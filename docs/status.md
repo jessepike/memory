@@ -18,7 +18,7 @@ updated: "2026-02-19"
 - [x] **Research:** Hook capabilities for Claude Code, Codex CLI, Gemini CLI. PreCompact can't call MCP tools. SessionEnd is best capture point. Codex has no hooks at all.
 - [x] **Design review:** `docs/design-capture-governance.md` — internal + external (Gemini, GPT). 14 issues resolved.
 - [x] **Implement v1.1 Phase 1:** Episodic log (SQLite, hash-chained), write_episode/get_episodes/end_session MCP tools. 119 tests pass. Validator: PASS.
-- [ ] **Implement v1.1 Phase 2:** /handoff Claude Code skill, CLAUDE.md briefing-not-autopilot protocol, SessionEnd hook, transcript extractor (Python, structured parsing), Codex AGENTS.md update. Design ref: Section 8 items 7-13.
+- [x] **Implement v1.1 Phase 2:** /handoff Claude Code skill, CLAUDE.md briefing-not-autopilot protocol, SessionEnd hook, transcript extractor (Python, structured parsing), Codex AGENTS.md update. Design ref: Section 8 items 7-13.
 - [ ] **Implement v1.1 Phase 3:** verify_chain MCP tool, source_ref on write_memory, episode stats in get_usage_report, docs update. Design ref: Section 8 items 14-17.
 - [ ] **Hybrid search (FTS5/BM25):** Add SQLite FTS5 keyword search alongside Chroma vector search in `search_memories`. 70/30 fusion. Low-cost, high-value for technical content. See `docs/research-synthesis.md`.
 - [ ] **Citation tracking:** Add optional `source_ref` field to `write_memory`. No behavior change now; unlocks JIT verification and staleness detection later.
@@ -216,3 +216,4 @@ updated: "2026-02-19"
 | 2026-02-20 | Design review + session lifecycle. 14 issues resolved. /handoff + briefing pattern added. |
 | 2026-02-20 | Phase 1 implemented: sessions/episodes schema, hash chaining, EpisodeStorage, 3 MCP tools, 116 tests. |
 | 2026-02-20 | Validator run: PASS. Fixed race condition, scale/concurrency tests, metadata MCP param. 119 tests. |
+| 2026-02-20 | Phase 2 complete: /handoff skill, CLAUDE.md briefing protocol, SessionEnd hook, transcript extractor. |
