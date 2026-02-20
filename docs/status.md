@@ -8,8 +8,8 @@ updated: "2026-02-19"
 
 ## Current State
 
-- **Phase:** v1.1 Phase 1 complete. Ready for Phase 2 (session lifecycle + capture).
-- **Focus:** Implement Phase 2 from `docs/design-capture-governance.md` Section 8, items 7-13.
+- **Phase:** v1.1 Phase 4 — Measurement & Iteration (2-week observation period started 2026-02-19).
+- **Focus:** Measure capture rate (handoff vs hook vs none), assess signal quality, decide on v1.2 direction.
 
 ## Next Steps
 
@@ -21,7 +21,7 @@ updated: "2026-02-19"
 - [x] **Implement v1.1 Phase 2:** /handoff Claude Code skill, CLAUDE.md briefing-not-autopilot protocol, SessionEnd hook, transcript extractor (Python, structured parsing), Codex AGENTS.md update. Design ref: Section 8 items 7-13.
 - [x] **Implement v1.1 Phase 3:** verify_chain MCP tool, source_ref on write_memory, episode stats in get_usage_report, docs update. Design ref: Section 8 items 14-17.
 - [ ] **Hybrid search (FTS5/BM25):** Add SQLite FTS5 keyword search alongside Chroma vector search in `search_memories`. 70/30 fusion. Low-cost, high-value for technical content. See `docs/research-synthesis.md`.
-- [ ] **Citation tracking:** Add optional `source_ref` field to `write_memory`. No behavior change now; unlocks JIT verification and staleness detection later.
+- [x] **Citation tracking:** `source_ref` field added to `write_memory` in Phase 3. Schema migration included.
 
 - [x] POST-01: Define memory routing heuristic (MCP vs auto-memory)
 - [x] POST-02: Add usage logging to MCP server (observability foundation)
@@ -218,3 +218,4 @@ updated: "2026-02-19"
 | 2026-02-20 | Validator run: PASS. Fixed race condition, scale/concurrency tests, metadata MCP param. 119 tests. |
 | 2026-02-20 | Phase 2 complete: /handoff skill, CLAUDE.md briefing protocol, SessionEnd hook, transcript extractor. |
 | 2026-02-20 | Phase 3 complete: verify_chain MCP tool, source_ref on write_memory, episode stats in get_usage_report, usage.md updated. 126 tests pass. |
+| 2026-02-19 | Phase 4 started: 2-week measurement period. Baseline: 2 sessions, 6 episodes, 1 handoff + 5 hook captures. Capture rate script added. |
