@@ -69,9 +69,12 @@ def test_schema_creates_indexes(tmp_path) -> None:
             "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_episodes_%';"
         ).fetchall()
     index_names = {r["name"] for r in rows}
+    # All 5 spec-required indexes must be present
     assert "idx_episodes_session" in index_names
     assert "idx_episodes_timestamp" in index_names
+    assert "idx_episodes_project" in index_names
     assert "idx_episodes_type" in index_names
+    assert "idx_episodes_agent" in index_names
 
 
 # ---------------------------------------------------------------------------

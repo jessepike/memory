@@ -329,3 +329,56 @@ def test_verify_chain_detects_tampering(store, db) -> None:
     result = store.verify_chain(sid)
     assert result["valid"] is False
     assert result["first_broken_sequence"] == 2
+
+
+def test_verify_chain_scale_100_events_5_sessions(store) -> None:
+    """Success Criterion 3: verify_chain valid across 100+ events in 5+ sessions."""
+    session_ids = [f"ses-scale-{i:03d}" for i in range(6)]
+    events_per_session = 20  # 6 × 20 = 120 events total
+
+    for sid in session_ids:
+        _write_n_episodes(store, events_per_session, sid)
+
+    for sid in session_ids:
+        result = store.verify_chain(sid)
+        assert result["valid"] is True, f"Chain invalid for {sid}: {result['error']}"
+        assert result["event_count"] == events_per_session
+
+
+# ---------------------------------------------------------------------------
+# Concurrent writes (Success Criterion 5)
+# ---------------------------------------------------------------------------
+
+def test_atomic_sequence_concurrent_writes(store) -> None:
+    """Success Criterion 5: concurrent writes produce monotonic, gapless sequences per session."""
+    import threading
+
+    sid = "ses-concurrent-001"
+    n_threads = 10
+    results: list = []
+    errors: list = []
+
+    def write_one(i: int) -> None:
+        try:
+            resp = store.write_episode(WriteEpisodeRequest(
+                content=f"concurrent event {i}",
+                event_type="action",
+                agent_id="agent",
+                session_id=sid,
+                namespace="global",
+            ))
+            results.append(resp.sequence)
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=write_one, args=(i,)) for i in range(n_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"Concurrent writes produced errors: {errors}"
+    assert len(results) == n_threads
+
+    # Sequences must be exactly {1, 2, ..., n_threads} — no gaps, no duplicates
+    assert sorted(results) == list(range(1, n_threads + 1))

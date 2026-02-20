@@ -222,6 +222,7 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
         severity: str = "info",
         client: str | None = None,
         source_ref: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Any:
         return _run_tool(
             memory_storage.write_episode,
@@ -235,6 +236,7 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
                 "severity": severity,
                 "client": client,
                 "source_ref": source_ref,
+                "metadata": metadata,
             },
             _tool_name="write_episode",
             _caller_id=agent_id,

@@ -350,16 +350,23 @@ class SQLiteMemoryDB:
         );
         """
         metadata_json = json.dumps(record.metadata) if record.metadata else None
-        with self.begin_immediate() as conn:
-            conn.execute(sql, {
-                "session_id": record.session_id,
-                "start_ts": record.start_ts,
-                "creator": record.creator,
-                "namespace": record.namespace,
-                "client": record.client,
-                "project": record.project,
-                "metadata_json": metadata_json,
-            })
+        try:
+            with self.begin_immediate() as conn:
+                conn.execute(sql, {
+                    "session_id": record.session_id,
+                    "start_ts": record.start_ts,
+                    "creator": record.creator,
+                    "namespace": record.namespace,
+                    "client": record.client,
+                    "project": record.project,
+                    "metadata_json": metadata_json,
+                })
+        except sqlite3.IntegrityError:
+            # Another thread/process inserted the session between our read and write.
+            existing = self.get_session(record.session_id)
+            if existing is not None:
+                return existing
+            raise
         return record
 
     def get_session(self, session_id: str) -> SessionRecord | None:

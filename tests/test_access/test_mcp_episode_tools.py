@@ -127,6 +127,21 @@ def test_write_episode_tool_auto_generates_session_id(app) -> None:
     assert result["session_id"].startswith("ses-")
 
 
+def test_write_episode_tool_passes_metadata(app, storage) -> None:
+    """metadata parameter is wired through MCP tool to episode row."""
+    sid = "ses-mcp-meta-write-001"
+    result = _call(app, "write_episode", {
+        "content": "Event with metadata.",
+        "event_type": "decision",
+        "agent_id": "agent",
+        "session_id": sid,
+        "namespace": "global",
+        "metadata": {"key": "value", "score": 42},
+    })
+    episodes = storage.db.get_episodes(session_id=sid)
+    assert episodes[0].metadata == {"key": "value", "score": 42}
+
+
 # ---------------------------------------------------------------------------
 # get_episodes
 # ---------------------------------------------------------------------------
