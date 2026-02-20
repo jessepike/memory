@@ -118,7 +118,7 @@ def run_stdio_test() -> dict[str, Any]:
             proc.stdin.flush()
             tools_resp = _read_response(proc)
             tool_names = sorted(t["name"] for t in tools_resp.get("result", {}).get("tools", []))
-            checklist["tools_list_returns_14"] = len(tool_names) == 14
+            checklist["tools_list_returns_15"] = len(tool_names) == 15
             artifacts["tools"] = tool_names
 
             # 3. Write a memory
