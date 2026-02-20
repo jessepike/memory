@@ -172,6 +172,81 @@ No hooks available. Rely on:
 
 Watch for hooks support (GitHub issue #2109, 411+ thumbs-up).
 
+### 3.4 Session Lifecycle
+
+The capture strategy (3.3) handles *how* data gets into the system. The session lifecycle defines the **user-facing protocol** — how sessions start and end, and how context flows between them.
+
+#### Design Principle: Briefing, Not Autopilot
+
+Agents must **never** silently load a previous session's handoff and start executing it. The user may have different intentions, the context may be stale (days or weeks old), or priorities may have shifted.
+
+Instead, agents **brief** the user and wait for direction:
+
+```
+Session Start:
+  1. Agent reads status.md and calls get_session_context (MCP)
+  2. Agent presents a 3-line brief:
+     "Last session: [summary]. Suggested next: [top priority]. Continue?"
+  3. Agent waits for user direction before doing anything
+```
+
+This is a standup, not an autopilot. Low cost (one exchange), respects user agency, handles stale context gracefully.
+
+#### Session End: `/handoff` (User-Triggered)
+
+The primary handoff mechanism is a user-triggered command — not an instruction agents may forget, not a hook that fires after context is gone. The user types `/handoff` when they decide the session is done.
+
+```
+Session End (/handoff):
+  1. Skill gathers deterministic data (git commits, files changed)
+  2. Agent summarizes work done, next steps, open questions
+  3. Skill calls end_session MCP tool → persists to episodic log
+  4. Agent calls write_memory for any cross-project learnings
+  5. Skill updates status.md session log entry
+  6. Skill updates backlog.md task statuses if changed
+```
+
+The `/handoff` skill is client-specific (Claude Code skill, Gemini extension, etc.) but the persistence goes through MCP (`end_session`), making the stored handoff available to any client on the next session.
+
+#### Cross-Client Handoff Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              Client-Side (convenience layer)              │
+│                                                          │
+│  Claude Code       Codex CLI         Gemini CLI          │
+│  /handoff skill    AGENTS.md         /handoff extension  │
+│  (gathers context, instruction       (gathers context,   │
+│   updates local    "call end_session  updates local       │
+│   project files)   before done"       project files)      │
+└──────┬─────────────────┬─────────────────┬───────────────┘
+       │           MCP (universal)         │
+┌──────▼─────────────────▼─────────────────▼───────────────┐
+│           MCP Memory Server (persistence layer)           │
+│                                                           │
+│  end_session          → writes structured handoff to      │
+│                         episodic log (session_end event)  │
+│  get_session_context  → returns last handoff + relevant   │
+│                         memories for session start brief  │
+│  write_memory         → persists cross-project learnings  │
+└───────────────────────────────────────────────────────────┘
+```
+
+**Separation of concerns:**
+- **MCP server** handles cross-client persistence (episodic log, semantic memory)
+- **Client-side skill** handles local project file updates (status.md, backlog.md)
+- **System prompt instructions** define what to capture (template, not enforcement)
+
+#### Handoff Reliability Layers
+
+| Layer | Mechanism | Reliability | Signal Quality |
+|-------|-----------|------------|----------------|
+| 1. `/handoff` skill | User-triggered command | **High** (user initiates) | **High** (agent has full context) |
+| 2. SessionEnd hook | Auto-fires on session close | **High** (system-triggered) | **Medium** (transcript parsing only) |
+| 3. Instruction-driven | CLAUDE.md / AGENTS.md / GEMINI.md | **Low** (40-60%) | **Variable** |
+
+Layer 1 is the primary mechanism. Layer 2 is the safety net (captures basic facts even if user forgets `/handoff`). Layer 3 is the universal fallback.
+
 ---
 
 ## 4. Episodic Event Log
@@ -398,15 +473,69 @@ Returns episodes in chronological order with hash chain intact.
 
 #### `end_session`
 
-Explicitly close a session. Writes a `session_end` event and optionally triggers summarization:
+Explicitly close a session. Writes a `session_end` event with structured handoff data. This is the cross-client persistence point — any agent on any client can read the handoff on the next session via `get_session_context`.
 
 ```json
 {
   "session_id": "ses-20260219-1600",
-  "summary": "Fixed FIX-01/02. Researched capture hooks. Started design doc.",
-  "agent_id": "claude-code"
+  "agent_id": "claude-code",
+  "summary": "Design review complete for capture & governance",
+  "work_done": [
+    "Internal review of design-capture-governance.md",
+    "External review via Gemini + GPT (11 issues resolved)",
+    "Updated design doc with all fixes"
+  ],
+  "next_steps": [
+    "Implement Phase 1: sessions + episodes tables",
+    "Add hash chaining utility",
+    "Add MCP tools: write_episode, get_episodes, end_session"
+  ],
+  "open_questions": [
+    "Q2: Structured parsing vs LLM extraction for transcripts"
+  ],
+  "commits": [
+    "38928e1 docs(design): resolve 11 review issues"
+  ],
+  "key_files_changed": [
+    "docs/design-capture-governance.md",
+    "docs/status.md"
+  ]
 }
 ```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `session_id` | yes | Session to close |
+| `agent_id` | yes | Who is closing the session |
+| `summary` | yes | One-line session summary |
+| `work_done` | no | List of completed items |
+| `next_steps` | no | Prioritized list for next session |
+| `open_questions` | no | Unresolved decisions or blockers |
+| `commits` | no | Git commit SHAs + messages |
+| `key_files_changed` | no | Important files modified |
+
+The structured fields are stored in the `session_end` episode's `metadata` JSON. The `summary` becomes the episode's `content`. This means `get_episodes(event_type="session_end")` returns all handoffs, and `get_session_context` can return the most recent one as the session start brief.
+
+#### Enhancement to `get_session_context` (existing tool)
+
+The existing `get_session_context` tool currently returns `{ recent: [...], relevant: [...] }` — recent memories and semantic matches. For v1.1, it gains a third field:
+
+```json
+{
+  "last_handoff": {
+    "session_id": "ses-20260219-1600",
+    "summary": "Design review complete for capture & governance",
+    "work_done": ["..."],
+    "next_steps": ["..."],
+    "open_questions": ["..."],
+    "timestamp": "2026-02-20T01:30:00Z"
+  },
+  "recent": ["..."],
+  "relevant": ["..."]
+}
+```
+
+`last_handoff` is populated from the most recent `session_end` episode for the caller's namespace. If no handoff exists, it's `null`. The agent uses this to present the session start brief.
 
 ### 4.7 Relationship to Existing Systems
 
@@ -536,7 +665,23 @@ Nothing in v1.1 closes off any v2.0 capability. The critical investment is the s
 
 **Note:** Episode namespace represents the project context where the activity occurred, which pragmatically maps to the same namespace used for semantic memories. This reuse is a v1.1 simplification — episodes are activity records (not knowledge), and future versions may introduce separate episode-specific access policies.
 
-### D7: Per-session hash chains
+### D7: Briefing over autopilot for session start
+
+**Chosen:** Agents present a brief from the last handoff and wait for user direction. They never silently load prior context and start executing.
+
+**Rationale:** Prior session context may be stale (days/weeks old), the user may have different intentions, or priorities may have shifted. Auto-executing a handoff's "next steps" without user confirmation risks wasted work and violates user agency.
+
+**Trade-off:** One extra exchange at session start. Cost is near-zero. Benefit is avoiding the wrong work entirely.
+
+### D8: `/handoff` as primary capture mechanism
+
+**Chosen:** User-triggered `/handoff` command is the primary handoff mechanism, not instruction-driven or hook-based capture.
+
+**Rationale:** Instructions are unreliable (~40-60%). Hooks fire after context is gone (shell-only, no agent). The `/handoff` command fires when the user decides the session is done, with the agent's full context window available. The client-side skill handles local file updates (status.md, backlog.md); the MCP `end_session` tool handles cross-client persistence.
+
+**Trade-off:** Requires user action. Mitigated by SessionEnd hook as safety net (captures basic facts when user forgets).
+
+### D9: Per-session hash chains
 
 **Chosen:** Each session has an independent hash chain. The `previous_hash` field links to the prior event *within the same session*, not globally.
 
@@ -594,27 +739,29 @@ Instruction-driven capture is estimated at 40-60% compliance. How do we measure 
 5. Add MCP tools: `write_episode`, `get_episodes`, `end_session`
 6. Tests: schema, hash chaining, atomic sequence, episode CRUD, MCP integration
 
-### Phase 2: Cross-Client Capture (Claude Code first)
+### Phase 2: Session Lifecycle & Cross-Client Capture (Claude Code first)
 
-7. Update CLAUDE.md session protocol with `write_episode` instructions
-8. Create Claude Code SessionEnd hook (shell → Python extractor using EpisodeStorage API)
-9. Create transcript extraction script (structured parsing with fallback logging)
-10. Update AGENTS.md (Codex) with `write_episode` instructions
-11. Gemini CLI extension (SessionEnd hook + MCP config) — deferred if stalls
+7. Enhance `get_session_context` to return `last_handoff` from episodic log
+8. Create Claude Code `/handoff` skill (gathers context, calls `end_session`, updates status.md)
+9. Update CLAUDE.md session protocol: briefing-not-autopilot + `/handoff` instruction
+10. Create Claude Code SessionEnd hook (shell → Python extractor as safety net)
+11. Create transcript extraction script (structured parsing with fallback logging)
+12. Update AGENTS.md (Codex) with `end_session` instructions
+13. Gemini CLI extension (SessionEnd hook + `/handoff` + MCP config) — deferred if stalls
 
 ### Phase 3: Governance Utilities
 
-12. Add `verify_chain` MCP tool (walk per-session hash chain, report integrity)
-13. Add `source_ref` field to `write_memory` (backlog item — connects semantic to episodic)
-14. Update `get_usage_report` to include episode stats
-15. Documentation: usage guide for episodic tools
+14. Add `verify_chain` MCP tool (walk per-session hash chain, report integrity)
+15. Add `source_ref` field to `write_memory` (backlog item — connects semantic to episodic)
+16. Update `get_usage_report` to include episode stats
+17. Documentation: usage guide for episodic + session lifecycle tools
 
 ### Phase 4: Measurement & Iteration
 
-16. Deploy, run for 2 weeks
-17. Measure capture rate (sessions vs episodes)
-18. Assess signal quality of extracted episodes
-19. Decide on LLM-based extraction (v1.2) based on data
+18. Deploy, run for 2 weeks
+19. Measure capture rate: `/handoff` usage vs SessionEnd hook fallback vs instruction-driven
+20. Assess signal quality of handoffs vs auto-extracted episodes
+21. Decide on LLM-based extraction (v1.2) based on data
 
 ### Privacy
 
@@ -642,9 +789,10 @@ Instruction-driven capture is estimated at 40-60% compliance. How do we measure 
 
 | # | Criterion | Measurement |
 |---|-----------|-------------|
-| 7 | Claude Code SessionEnd hook captures episodes | Run 5 sessions, check episode count > 0 for each |
-| 8 | Instruction-driven capture works for at least Claude Code | Agent writes ≥1 episode via instruction in 3/5 test sessions |
-| 9 | No user-visible noise during normal operation | Hooks produce no stderr/stdout visible to user |
+| 7 | `/handoff` produces structured `session_end` episode | Handoff data retrievable via `get_session_context` on next session |
+| 8 | `get_session_context` returns `last_handoff` for briefing | Next session agent presents summary and waits for user direction |
+| 9 | Claude Code SessionEnd hook captures episodes as safety net | Run 5 sessions without `/handoff`, check episode count > 0 |
+| 10 | No user-visible noise during normal operation | Hooks produce no stderr/stdout visible to user |
 
 ---
 
@@ -663,7 +811,10 @@ Instruction-driven capture is estimated at 40-60% compliance. How do we measure 
 | 9 | Success criteria 3/4 not automatable | Internal + GPT | Medium | Resolved | Split criteria into Automated (Phase 1 gate) vs Manual verification (Phase 2). Added concurrent write test. |
 | 10 | Scope phasing needs reinforcement | GPT | Medium | Resolved | Marked Phase 1 as standalone MVP. Phase 2+ ships independently. Gemini deferred if stalls. |
 | 11 | Q2 extraction fallback behavior missing | Gemini + GPT | Medium | Resolved | Added fallback: zero-episode extraction still logs session_end event with extraction metadata. |
-| — | Review complete — internal + external (Gemini, GPT; Kimi timed out) | — | — | Complete | 11 accepted, 6 rejected. |
+| 12 | No session lifecycle protocol — agents auto-execute stale handoffs | Human review | High | Resolved | Added Section 3.4: briefing-not-autopilot. Agent presents brief, waits for user direction (D7). |
+| 13 | No cross-client handoff mechanism — `/handoff` is Claude-only | Human review | High | Resolved | `end_session` MCP tool is the universal persistence layer. `/handoff` skill is client convenience (D8). Enhanced `get_session_context` returns `last_handoff`. |
+| 14 | `end_session` payload too sparse for handoff | Human review | Medium | Resolved | Added structured handoff fields: work_done, next_steps, open_questions, commits, key_files_changed. |
+| — | Review complete — internal + external (Gemini, GPT; Kimi timed out) + human review | — | — | Complete | 14 accepted, 6 rejected. |
 
 ### Rejected Issues
 
