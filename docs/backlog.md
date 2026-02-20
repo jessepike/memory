@@ -1,6 +1,6 @@
 ---
 project: "Memory Layer"
-updated: "2026-02-19"
+updated: "2026-02-20"
 ---
 
 # Backlog
@@ -28,6 +28,9 @@ updated: "2026-02-19"
 | POST-04 | P2 | done | agent | Add usage report tool (`get_usage_report`) | MCP tool or script that reports: memories written/searched this period, search-to-write ratio, active namespaces, dedup rate, empty searches (gap signal) |
 | POST-05 | P2 | moved | — | Register memory MCP in Codex and Gemini → **moved to capabilities-registry CR-10** | Codex CLI installed + registered; Gemini API key configured + registered |
 | POST-06 | P3 | moved | — | Weekly review cadence → **moved to Krypton B17** | `/focus` should surface weekly memory review reminder |
+| V1-P1 | P0 | done | agent | Phase 1: Episodic log foundation | 119 tests pass, 18 MCP tools, validator PASS |
+| V1-P2 | P1 | todo | — | Phase 2: Session lifecycle + Claude Code capture | /handoff skill, CLAUDE.md briefing protocol, SessionEnd hook, transcript extractor, Codex AGENTS.md update |
+| V1-P3 | P2 | todo | — | Phase 3: Governance utilities | verify_chain MCP tool, source_ref on write_memory, episode stats in get_usage_report, docs update |
 ## Done
 
 | id | priority | status | owner | description | done_when |
