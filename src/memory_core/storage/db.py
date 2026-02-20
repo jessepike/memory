@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -11,7 +12,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from memory_core.models import MemoryEntry, MemoryStatus, memory_entry_from_db_row
+from memory_core.models import EpisodicEvent, MemoryEntry, MemoryStatus, SessionRecord, memory_entry_from_db_row
+from memory_core.utils.episode import compute_event_hash
 
 
 class MemoryNotFoundError(Exception):
@@ -315,3 +317,249 @@ class SQLiteMemoryDB:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         return conn
+
+    # ------------------------------------------------------------------
+    # Episode / session methods
+    # ------------------------------------------------------------------
+
+    def get_or_create_session(self, session_id: str, creator: str, namespace: str, **kwargs: Any) -> SessionRecord:
+        """Return existing session or insert a new one.
+
+        Extra kwargs (client, project, metadata) are passed on insert only.
+        """
+        existing = self.get_session(session_id)
+        if existing is not None:
+            return existing
+        now = datetime.now(UTC).isoformat()
+        record = SessionRecord(
+            session_id=session_id,
+            start_ts=now,
+            creator=creator,
+            namespace=namespace,
+            client=kwargs.get("client"),
+            project=kwargs.get("project"),
+            metadata=kwargs.get("metadata"),
+        )
+        sql = """
+        INSERT INTO sessions (
+            session_id, start_ts, creator, namespace, client, project,
+            finalized, last_sequence, chain_head, metadata, schema_version
+        ) VALUES (
+            :session_id, :start_ts, :creator, :namespace, :client, :project,
+            0, 0, NULL, :metadata_json, 1
+        );
+        """
+        metadata_json = json.dumps(record.metadata) if record.metadata else None
+        with self.begin_immediate() as conn:
+            conn.execute(sql, {
+                "session_id": record.session_id,
+                "start_ts": record.start_ts,
+                "creator": record.creator,
+                "namespace": record.namespace,
+                "client": record.client,
+                "project": record.project,
+                "metadata_json": metadata_json,
+            })
+        return record
+
+    def get_session(self, session_id: str) -> SessionRecord | None:
+        """Fetch one session by ID."""
+        sql = "SELECT * FROM sessions WHERE session_id = ? LIMIT 1;"
+        with self._connect() as conn:
+            row = conn.execute(sql, (session_id,)).fetchone()
+        return self._row_to_session(row) if row else None
+
+    def insert_episode_atomic(self, episode_fields: dict[str, Any]) -> EpisodicEvent:
+        """Atomically append an episode and update the session chain.
+
+        Within a single BEGIN IMMEDIATE transaction:
+        1. Read session.last_sequence and session.chain_head
+        2. Compute new sequence and event_hash
+        3. INSERT episode
+        4. UPDATE sessions chain head and sequence counter
+
+        Args:
+            episode_fields: Dict with id, session_id, timestamp, event_type,
+                severity, agent_id, client, project, namespace, content,
+                metadata, source_ref, schema_version. sequence and
+                event_hash/previous_hash are computed here.
+
+        Returns:
+            Fully populated EpisodicEvent with computed hash fields.
+        """
+        metadata_json = (
+            json.dumps(episode_fields.get("metadata")) if episode_fields.get("metadata") else None
+        )
+
+        with self.begin_immediate() as conn:
+            # Read current chain state
+            sess_row = conn.execute(
+                "SELECT last_sequence, chain_head FROM sessions WHERE session_id = ?;",
+                (episode_fields["session_id"],),
+            ).fetchone()
+            if sess_row is None:
+                raise ValueError(f"Session not found: {episode_fields['session_id']}")
+
+            prev_hash: str | None = sess_row["chain_head"]
+            new_sequence = sess_row["last_sequence"] + 1
+
+            # Build event dict for hashing
+            event_for_hash = {
+                "id": episode_fields["id"],
+                "session_id": episode_fields["session_id"],
+                "sequence": new_sequence,
+                "timestamp": episode_fields["timestamp"],
+                "event_type": episode_fields["event_type"],
+                "agent_id": episode_fields["agent_id"],
+                "content": episode_fields["content"],
+            }
+            event_hash = compute_event_hash(event_for_hash, prev_hash)
+
+            # INSERT episode
+            conn.execute(
+                """
+                INSERT INTO episodes (
+                    id, session_id, sequence, timestamp, event_type, severity,
+                    agent_id, client, project, namespace, content, metadata,
+                    source_ref, event_hash, previous_hash, schema_version
+                ) VALUES (
+                    :id, :session_id, :sequence, :timestamp, :event_type, :severity,
+                    :agent_id, :client, :project, :namespace, :content, :metadata,
+                    :source_ref, :event_hash, :previous_hash, :schema_version
+                );
+                """,
+                {
+                    "id": episode_fields["id"],
+                    "session_id": episode_fields["session_id"],
+                    "sequence": new_sequence,
+                    "timestamp": episode_fields["timestamp"],
+                    "event_type": episode_fields["event_type"],
+                    "severity": episode_fields.get("severity", "info"),
+                    "agent_id": episode_fields["agent_id"],
+                    "client": episode_fields.get("client"),
+                    "project": episode_fields.get("project"),
+                    "namespace": episode_fields.get("namespace", "global"),
+                    "content": episode_fields["content"],
+                    "metadata": metadata_json,
+                    "source_ref": episode_fields.get("source_ref"),
+                    "event_hash": event_hash,
+                    "previous_hash": prev_hash,
+                    "schema_version": episode_fields.get("schema_version", 1),
+                },
+            )
+
+            # UPDATE sessions chain head and counter
+            conn.execute(
+                "UPDATE sessions SET last_sequence = ?, chain_head = ? WHERE session_id = ?;",
+                (new_sequence, event_hash, episode_fields["session_id"]),
+            )
+
+        return EpisodicEvent(
+            id=episode_fields["id"],
+            session_id=episode_fields["session_id"],
+            sequence=new_sequence,
+            timestamp=episode_fields["timestamp"],
+            event_type=episode_fields["event_type"],
+            severity=episode_fields.get("severity", "info"),
+            agent_id=episode_fields["agent_id"],
+            client=episode_fields.get("client"),
+            project=episode_fields.get("project"),
+            namespace=episode_fields.get("namespace", "global"),
+            content=episode_fields["content"],
+            metadata=episode_fields.get("metadata"),
+            source_ref=episode_fields.get("source_ref"),
+            event_hash=event_hash,
+            previous_hash=prev_hash,
+            schema_version=episode_fields.get("schema_version", 1),
+        )
+
+    def finalize_session(self, session_id: str) -> None:
+        """Mark a session as finalized (ended)."""
+        now = datetime.now(UTC).isoformat()
+        with self.begin_immediate() as conn:
+            conn.execute(
+                "UPDATE sessions SET finalized = 1, end_ts = ? WHERE session_id = ?;",
+                (now, session_id),
+            )
+
+    def get_episodes(
+        self,
+        *,
+        session_id: str | None = None,
+        project: str | None = None,
+        event_type: str | None = None,
+        since: str | None = None,
+        namespace: str | None = None,
+        namespaces: list[str] | None = None,
+        limit: int = 50,
+    ) -> list[EpisodicEvent]:
+        """Query episodes with optional filters, chronological order."""
+        clauses: list[str] = []
+        params: list[Any] = []
+
+        if session_id is not None:
+            clauses.append("session_id = ?")
+            params.append(session_id)
+        if project is not None:
+            clauses.append("project = ?")
+            params.append(project)
+        if event_type is not None:
+            clauses.append("event_type = ?")
+            params.append(event_type)
+        if since is not None:
+            clauses.append("timestamp >= ?")
+            params.append(since)
+        if namespace is not None:
+            clauses.append("namespace = ?")
+            params.append(namespace)
+        elif namespaces:
+            placeholders = ", ".join("?" for _ in namespaces)
+            clauses.append(f"namespace IN ({placeholders})")
+            params.extend(namespaces)
+
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = f"""
+        SELECT * FROM episodes
+        {where}
+        ORDER BY timestamp ASC, sequence ASC
+        LIMIT ?;
+        """
+        params.append(limit)
+
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [self._row_to_episode(row) for row in rows]
+
+    def get_last_session_end(self, *, namespaces: list[str] | None = None) -> EpisodicEvent | None:
+        """Return the most recent session_end episode for a namespace set."""
+        clauses = ["event_type = 'session_end'"]
+        params: list[Any] = []
+        if namespaces:
+            placeholders = ", ".join("?" for _ in namespaces)
+            clauses.append(f"namespace IN ({placeholders})")
+            params.extend(namespaces)
+        where = " AND ".join(clauses)
+        sql = f"""
+        SELECT * FROM episodes
+        WHERE {where}
+        ORDER BY timestamp DESC
+        LIMIT 1;
+        """
+        with self._connect() as conn:
+            row = conn.execute(sql, params).fetchone()
+        return self._row_to_episode(row) if row else None
+
+    def _row_to_session(self, row: sqlite3.Row) -> SessionRecord:
+        data = dict(row)
+        # Deserialize JSON metadata field
+        if data.get("metadata") and isinstance(data["metadata"], str):
+            data["metadata"] = json.loads(data["metadata"])
+        # SQLite stores finalized as int
+        data["finalized"] = bool(data.get("finalized", 0))
+        return SessionRecord.model_validate(data)
+
+    def _row_to_episode(self, row: sqlite3.Row) -> EpisodicEvent:
+        data = dict(row)
+        if data.get("metadata") and isinstance(data["metadata"], str):
+            data["metadata"] = json.loads(data["metadata"])
+        return EpisodicEvent.model_validate(data)

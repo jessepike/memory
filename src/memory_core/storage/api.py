@@ -10,17 +10,24 @@ from uuid import UUID
 from memory_core.config import load_config
 from memory_core.models import (
     ClientProfile,
+    EndSessionRequest,
+    EndSessionResponse,
+    EpisodicEvent,
     ForbiddenScopeError,
+    GetEpisodesRequest,
     MemoryConfig,
     MemoryEntry,
     MemoryStatus,
     SearchResultItem,
     StatsResponse,
     UpdateMemoryRequest,
+    WriteEpisodeRequest,
+    WriteEpisodeResponse,
     WriteMemoryRequest,
     WriteMemoryResponse,
 )
 from memory_core.storage.db import IdempotencyConflictError, SQLiteMemoryDB
+from memory_core.storage.episode_storage import EpisodeStorage
 from memory_core.storage.vector_store import ChromaVectorStore
 from memory_core.utils.consolidation import build_idempotency_key
 from memory_core.utils.embeddings import EmbeddingMode, EmbeddingService
@@ -55,11 +62,13 @@ class MemoryStorage:
         db: SQLiteMemoryDB | None = None,
         vector_store: ChromaVectorStore | None = None,
         embeddings: EmbeddingService | None = None,
+        episode_storage: EpisodeStorage | None = None,
     ) -> None:
         self.config = config
         self.db = db or SQLiteMemoryDB(config.paths.sqlite_db)
         self.vector_store = vector_store or ChromaVectorStore(config.paths.chroma_dir)
         self.embeddings = embeddings or EmbeddingService(config, mode=EmbeddingMode.RUNTIME)
+        self.episode_storage = episode_storage or EpisodeStorage(self.db)
         self.last_reconcile_at: str | None = None
 
     @classmethod
@@ -206,7 +215,7 @@ class MemoryStorage:
         query: str | None = None,
         limit: int = 10,
     ) -> dict[str, Any]:
-        """Return `{recent, relevant}` session context payload."""
+        """Return `{last_handoff, recent, relevant}` session context payload."""
         recent = self.get_recent(caller_id=caller_id, namespace=namespace, limit=limit)
         relevant: list[SearchResultItem] = []
         if query:
@@ -216,7 +225,34 @@ class MemoryStorage:
                 namespace=namespace,
                 limit=limit,
             )
-        return {"recent": recent, "relevant": relevant}
+        namespaces = self._resolve_scope(caller_id=caller_id, requested_namespace=namespace)
+        last_handoff = self.episode_storage.get_last_handoff(namespaces=namespaces)
+        return {"last_handoff": last_handoff, "recent": recent, "relevant": relevant}
+
+    def write_episode(
+        self,
+        request: WriteEpisodeRequest | dict[str, Any],
+    ) -> WriteEpisodeResponse:
+        """Write an episode to the episodic log."""
+        return self.episode_storage.write_episode(request)
+
+    def get_episodes(
+        self,
+        request: GetEpisodesRequest | dict[str, Any],
+        *,
+        caller_id: str = "unknown",
+        namespace: str | None = None,
+    ) -> list[EpisodicEvent]:
+        """Query episodes with namespace-based access control."""
+        allowed_namespaces = self._resolve_scope(caller_id=caller_id, requested_namespace=namespace)
+        return self.episode_storage.get_episodes(request, allowed_namespaces=allowed_namespaces)
+
+    def end_session(
+        self,
+        request: EndSessionRequest | dict[str, Any],
+    ) -> EndSessionResponse:
+        """Close a session with a structured handoff payload."""
+        return self.episode_storage.end_session(request)
 
     def update_memory(
         self,

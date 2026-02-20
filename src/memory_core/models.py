@@ -217,3 +217,139 @@ def memory_entry_from_db_row(row: dict[str, Any]) -> MemoryEntry:
     """Convert a SQLite row dict into a validated MemoryEntry."""
 
     return MemoryEntry.model_validate(row)
+
+
+# ---------------------------------------------------------------------------
+# Episodic log models
+# ---------------------------------------------------------------------------
+
+
+class EventType(str, Enum):
+    """Allowed episodic event categories."""
+
+    SESSION_START = "session_start"
+    SESSION_END = "session_end"
+    DECISION = "decision"
+    OBSERVATION = "observation"
+    ACTION = "action"
+    ERROR = "error"
+    MILESTONE = "milestone"
+    REFLECTION = "reflection"
+
+
+class Severity(str, Enum):
+    """Event severity levels."""
+
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+
+class SessionRecord(BaseModel):
+    """Canonical session row shape mirrored from SQLite."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str
+    start_ts: str
+    end_ts: str | None = None
+    creator: str
+    client: str | None = None
+    project: str | None = None
+    namespace: str = "global"
+    finalized: bool = False
+    last_sequence: int = 0
+    chain_head: str | None = None
+    metadata: dict[str, Any] | None = None
+    schema_version: int = 1
+
+
+class EpisodicEvent(BaseModel):
+    """Canonical episode row shape mirrored from SQLite."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    session_id: str
+    sequence: int
+    timestamp: str
+    event_type: str
+    severity: str = "info"
+    agent_id: str
+    client: str | None = None
+    project: str | None = None
+    namespace: str = "global"
+    content: str
+    metadata: dict[str, Any] | None = None
+    source_ref: str | None = None
+    event_hash: str
+    previous_hash: str | None = None
+    schema_version: int = 1
+
+
+class WriteEpisodeRequest(BaseModel):
+    """Input payload for write_episode MCP tool."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    content: str = Field(min_length=1)
+    event_type: str = Field(min_length=1)
+    agent_id: str = Field(min_length=1, max_length=128)
+    session_id: str | None = None
+    project: str | None = Field(default=None, max_length=128)
+    namespace: str = Field(default="global", min_length=1, max_length=128)
+    severity: str = "info"
+    client: str | None = Field(default=None, max_length=64)
+    source_ref: str | None = Field(default=None, max_length=512)
+    metadata: dict[str, Any] | None = None
+
+
+class WriteEpisodeResponse(BaseModel):
+    """Output payload for write_episode MCP tool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    episode_id: str
+    session_id: str
+    sequence: int
+    event_hash: str
+
+
+class GetEpisodesRequest(BaseModel):
+    """Input payload for get_episodes MCP tool."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    session_id: str | None = None
+    project: str | None = None
+    event_type: str | None = None
+    since: str | None = None
+    namespace: str | None = None
+    limit: int = Field(default=50, ge=1, le=500)
+
+
+class EndSessionRequest(BaseModel):
+    """Input payload for end_session MCP tool."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    session_id: str = Field(min_length=1)
+    agent_id: str = Field(min_length=1, max_length=128)
+    summary: str = Field(min_length=1)
+    work_done: list[str] | None = None
+    next_steps: list[str] | None = None
+    open_questions: list[str] | None = None
+    commits: list[str] | None = None
+    key_files_changed: list[str] | None = None
+    namespace: str = Field(default="global", min_length=1, max_length=128)
+
+
+class EndSessionResponse(BaseModel):
+    """Output payload for end_session MCP tool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str
+    episode_id: str
+    event_hash: str

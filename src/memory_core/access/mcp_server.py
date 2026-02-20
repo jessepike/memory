@@ -212,6 +212,93 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
         return result
 
     @app.tool()
+    def write_episode(
+        content: str,
+        event_type: str,
+        agent_id: str,
+        session_id: str | None = None,
+        project: str | None = None,
+        namespace: str = "global",
+        severity: str = "info",
+        client: str | None = None,
+        source_ref: str | None = None,
+    ) -> Any:
+        return _run_tool(
+            memory_storage.write_episode,
+            {
+                "content": content,
+                "event_type": event_type,
+                "agent_id": agent_id,
+                "session_id": session_id,
+                "project": project,
+                "namespace": namespace,
+                "severity": severity,
+                "client": client,
+                "source_ref": source_ref,
+            },
+            _tool_name="write_episode",
+            _caller_id=agent_id,
+            _namespace=namespace,
+        )
+
+    @app.tool()
+    def get_episodes(
+        caller_id: str = "unknown",
+        session_id: str | None = None,
+        project: str | None = None,
+        event_type: str | None = None,
+        since: str | None = None,
+        namespace: str | None = None,
+        limit: int = 50,
+    ) -> Any:
+        return _run_tool(
+            memory_storage.get_episodes,
+            {
+                "session_id": session_id,
+                "project": project,
+                "event_type": event_type,
+                "since": since,
+                "namespace": namespace,
+                "limit": limit,
+            },
+            caller_id=caller_id,
+            namespace=namespace,
+            _tool_name="get_episodes",
+            _caller_id=caller_id,
+            _namespace=namespace,
+        )
+
+    @app.tool()
+    def end_session(
+        session_id: str,
+        agent_id: str,
+        summary: str,
+        namespace: str = "global",
+        work_done: list[str] | None = None,
+        next_steps: list[str] | None = None,
+        open_questions: list[str] | None = None,
+        commits: list[str] | None = None,
+        key_files_changed: list[str] | None = None,
+    ) -> Any:
+        return _run_tool(
+            memory_storage.end_session,
+            {
+                "session_id": session_id,
+                "agent_id": agent_id,
+                "summary": summary,
+                "namespace": namespace,
+                "work_done": work_done,
+                "next_steps": next_steps,
+                "open_questions": open_questions,
+                "commits": commits,
+                "key_files_changed": key_files_changed,
+            },
+            _tool_name="end_session",
+            _caller_id=agent_id,
+            _namespace=namespace,
+        )
+
+    @app.tool()
     def health(caller_id: str = "unknown") -> dict[str, str]:
         start = time.monotonic()
         result = {"status": "ok"}
