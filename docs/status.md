@@ -8,8 +8,8 @@ updated: "2026-02-19"
 
 ## Current State
 
-- **Phase:** Design review. FIX-01/02 resolved. Hook research complete. Design doc for Memory Capture & Governance ready for internal + external review.
-- **Focus:** Get `docs/design-capture-governance.md` through review cycles, then implement episodic log + cross-client capture.
+- **Phase:** Design review pending. FIX-01/02 resolved. Research complete. Design doc ready.
+- **Focus:** Run `docs/design-capture-governance.md` through internal + external review, then implement.
 
 ## Next Steps
 
@@ -210,4 +210,4 @@ updated: "2026-02-19"
 | 2026-02-11 | POST-02 complete. Added usage logging to MCP server. New `UsageLogger` class writes append-only JSONL to `data/usage.jsonl`. Every `_run_tool()` call logs tool name, caller_id, namespace, duration_ms, status, and error. Fail-safe (never breaks tool calls). Added `usage_log` to `PathsConfig` and `memory_config.yaml`. 41 tests pass + 15 smoke checks. |
 | 2026-02-11 | POST-04 complete. Added `get_usage_report` MCP tool. New `UsageReporter` class reads JSONL log and computes metrics: call counts by tool/status/namespace/caller, search-to-write ratio, error rate, avg duration. Fail-safe (returns empty report on missing/corrupt file). 10 unit tests + 1 integration test. 51 tests pass, 15 tool smoke (tool_count=15). |
 | 2026-02-19 | Validation session. Missing client_profiles identified as root cause. FIX-01/02 backlogged. 4 docs + 3 diagrams created. Capture problem documented. |
-| 2026-02-19 | FIX-01/02 resolved. Hook research complete (3 clients). Design doc written. 5 KB entries captured. |
+| 2026-02-19 | FIX-01/02 resolved. Hook research (3 clients). Design doc written. 5 KB entries. KB cross-checked. |
