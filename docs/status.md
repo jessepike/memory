@@ -17,7 +17,9 @@ updated: "2026-02-19"
 - [x] **FIX-02 (P0):** Fix `scripts/mcp_stdio_test.py` line 121 — tool count assertion (14→15).
 - [x] **Research:** Hook capabilities for Claude Code, Codex CLI, Gemini CLI. PreCompact can't call MCP tools. SessionEnd is best capture point. Codex has no hooks at all.
 - [x] **Design review:** `docs/design-capture-governance.md` — internal + external (Gemini, GPT). 11 issues resolved.
-- [ ] **Implement v1.1:** Episodic log (SQLite, hash-chained), write_episode/get_episodes/end_session MCP tools, SessionEnd hooks, system prompt updates.
+- [x] **Implement v1.1 Phase 1:** Episodic log (SQLite, hash-chained), write_episode/get_episodes/end_session MCP tools (18 tools total, 116 tests pass).
+- [ ] **Implement v1.1 Phase 2:** Session lifecycle (get_session_context last_handoff complete), /handoff skill, CLAUDE.md briefing protocol, SessionEnd hook, transcript extractor.
+- [ ] **Implement v1.1 Phase 3:** verify_chain MCP tool, source_ref on write_memory, episode stats in get_usage_report.
 - [ ] **Hybrid search (FTS5/BM25):** Add SQLite FTS5 keyword search alongside Chroma vector search in `search_memories`. 70/30 fusion. Low-cost, high-value for technical content. See `docs/research-synthesis.md`.
 - [ ] **Citation tracking:** Add optional `source_ref` field to `write_memory`. No behavior change now; unlocks JIT verification and staleness detection later.
 
@@ -212,3 +214,4 @@ updated: "2026-02-19"
 | 2026-02-19 | Validation session. Missing client_profiles identified as root cause. FIX-01/02 backlogged. 4 docs + 3 diagrams created. Capture problem documented. |
 | 2026-02-19 | FIX-01/02 resolved. Hook research (3 clients). Design doc written. 5 KB entries. KB cross-checked. |
 | 2026-02-20 | Design review + session lifecycle. 14 issues resolved. /handoff + briefing pattern added. |
+| 2026-02-20 | Phase 1 implemented: sessions/episodes schema, hash chaining, EpisodeStorage, 3 MCP tools, 116 tests. |
