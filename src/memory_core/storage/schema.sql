@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS memories (
     writer_id TEXT NOT NULL,
     writer_type TEXT NOT NULL,
     source_project TEXT,
+    source_ref TEXT,
     idempotency_key TEXT NOT NULL,
     confidence REAL NOT NULL DEFAULT 1.0 CHECK(confidence >= 0.0 AND confidence <= 1.0),
     status TEXT NOT NULL DEFAULT 'staged',

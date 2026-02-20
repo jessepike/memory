@@ -382,3 +382,33 @@ def test_atomic_sequence_concurrent_writes(store) -> None:
 
     # Sequences must be exactly {1, 2, ..., n_threads} — no gaps, no duplicates
     assert sorted(results) == list(range(1, n_threads + 1))
+
+
+# ---------------------------------------------------------------------------
+# episode_stats (Phase 3, item 16)
+# ---------------------------------------------------------------------------
+
+def test_episode_stats_empty(store) -> None:
+    stats = store.episode_stats()
+    assert stats["total_sessions"] == 0
+    assert stats["total_episodes"] == 0
+    assert stats["finalized_sessions"] == 0
+    assert stats["session_end_count"] == 0
+    assert stats["last_session_ts"] is None
+
+
+def test_episode_stats_after_writes(store, db) -> None:
+    sid = "ses-stats-001"
+    db.get_or_create_session(sid, creator="agent", namespace="global")
+    req = WriteEpisodeRequest(content="Event 1.", event_type="action", agent_id="agent", session_id=sid)
+    store.write_episode(req)
+
+    end_req = EndSessionRequest(session_id=sid, agent_id="agent", summary="Done.")
+    store.end_session(end_req)
+
+    stats = store.episode_stats()
+    assert stats["total_sessions"] >= 1
+    assert stats["total_episodes"] >= 2  # action + session_end
+    assert stats["finalized_sessions"] >= 1
+    assert stats["session_end_count"] >= 1
+    assert stats["last_session_ts"] is not None

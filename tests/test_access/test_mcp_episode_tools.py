@@ -271,6 +271,82 @@ def test_episode_tools_are_registered(app) -> None:
 
 
 def test_total_tool_count_increased(app) -> None:
-    """Tool count should be 18 (15 existing + 3 new episode tools)."""
+    """Tool count should be 19 (15 existing + 3 episode tools + 1 verify_chain)."""
     tool_count = len(app._tool_manager._tools)
-    assert tool_count == 18
+    assert tool_count == 19
+
+
+# ---------------------------------------------------------------------------
+# verify_chain (Phase 3, item 14)
+# ---------------------------------------------------------------------------
+
+def test_verify_chain_valid_session(app) -> None:
+    """verify_chain returns valid=True for a session with intact chain."""
+    ep = _call(app, "write_episode", {
+        "content": "First event.",
+        "event_type": "action",
+        "agent_id": "claude-code",
+    })
+    session_id = ep["session_id"]
+
+    _call(app, "write_episode", {
+        "content": "Second event.",
+        "event_type": "action",
+        "agent_id": "claude-code",
+        "session_id": session_id,
+    })
+
+    result = _call(app, "verify_chain", {"session_id": session_id})
+    assert result["valid"] is True
+    assert result["event_count"] == 2
+    assert result["first_broken_sequence"] is None
+    assert result["error"] is None
+
+
+def test_verify_chain_empty_session(app) -> None:
+    """verify_chain on unknown session returns valid=True with event_count=0."""
+    result = _call(app, "verify_chain", {"session_id": "ses-nonexistent"})
+    assert result["valid"] is True
+    assert result["event_count"] == 0
+
+
+def test_verify_chain_registered(app) -> None:
+    tool_names = {t.name for t in app._tool_manager._tools.values()}
+    assert "verify_chain" in tool_names
+
+
+# ---------------------------------------------------------------------------
+# source_ref on write_memory (Phase 3, item 15)
+# ---------------------------------------------------------------------------
+
+def test_write_memory_accepts_source_ref(app) -> None:
+    """write_memory accepts source_ref and stores it without error."""
+    result = _call(app, "write_memory", {
+        "content": "Hash chaining uses SHA-256 over (prev_hash + event fields).",
+        "memory_type": "observation",
+        "namespace": "global",
+        "writer_id": "claude-code",
+        "source_ref": "commit:abc1234",
+    })
+    assert result["action"] in ("added", "skipped")
+
+
+# ---------------------------------------------------------------------------
+# episode stats in get_usage_report (Phase 3, item 16)
+# ---------------------------------------------------------------------------
+
+def test_get_usage_report_includes_episode_stats(app) -> None:
+    """get_usage_report response includes an 'episodes' key with DB stats."""
+    _call(app, "write_episode", {
+        "content": "Did something.",
+        "event_type": "action",
+        "agent_id": "claude-code",
+    })
+
+    report = _call(app, "get_usage_report", {"caller_id": "claude-code"})
+    assert "episodes" in report
+    eps = report["episodes"]
+    assert "total_sessions" in eps
+    assert "total_episodes" in eps
+    assert eps["total_sessions"] >= 1
+    assert eps["total_episodes"] >= 1

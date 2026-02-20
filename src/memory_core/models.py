@@ -55,6 +55,7 @@ class MemoryBase(BaseModel):
     writer_id: str = Field(default="unknown", min_length=1, max_length=128)
     writer_type: WriterType = WriterType.AGENT
     source_project: str | None = Field(default=None, max_length=128)
+    source_ref: str | None = Field(default=None, max_length=512)
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
 
     @field_validator("namespace")

@@ -209,6 +209,22 @@ class EpisodeStorage:
             })
         return result
 
+    def episode_stats(self) -> dict[str, Any]:
+        """Return aggregate episode/session counts from the SQLite DB.
+
+        Fail-safe: returns zeroed dict on any error.
+        """
+        try:
+            return self.db.get_episode_stats()
+        except Exception:
+            return {
+                "total_sessions": 0,
+                "finalized_sessions": 0,
+                "total_episodes": 0,
+                "session_end_count": 0,
+                "last_session_ts": None,
+            }
+
     def verify_chain(self, session_id: str) -> dict[str, Any]:
         """Walk the hash chain for a session and verify integrity.
 

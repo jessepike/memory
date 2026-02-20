@@ -1,7 +1,7 @@
 ---
 project: "Memory Layer"
 type: "usage-guide"
-updated: "2026-02-10"
+updated: "2026-02-20"
 ---
 
 # Memory Layer Usage Guide
@@ -53,6 +53,7 @@ When scope is denied, tools return:
     "namespace": "memory-layer",
     "writer_id": "memory-layer-agent",
     "writer_type": "agent",
+    "source_ref": "commit:abc1234",
     "confidence": 0.95
   }
 }
@@ -244,3 +245,132 @@ cd ~/code/_shared/capabilities-registry
 ```
 
 Dry-run variants (without `--apply`) print exact commands before execution.
+
+---
+
+## Episodic Event Log (v1.1+)
+
+The episodic log records agent sessions as an append-only, hash-chained audit trail. Use it for session handoffs and governance.
+
+### write_episode — Record an event
+
+```json
+{
+  "tool": "write_episode",
+  "arguments": {
+    "content": "Added client_profiles to production config.",
+    "event_type": "action",
+    "agent_id": "claude-code",
+    "session_id": "ses-20260220-001",
+    "project": "memory-layer",
+    "namespace": "global",
+    "source_ref": "commit:e997266"
+  }
+}
+```
+
+`session_id` is auto-generated if omitted. The session is auto-created if it doesn't exist.
+`source_ref` links the episode to evidence (commit SHA, file path, PR URL, etc.).
+
+### end_session — Close a session with a handoff
+
+```json
+{
+  "tool": "end_session",
+  "arguments": {
+    "session_id": "ses-20260220-001",
+    "agent_id": "claude-code",
+    "summary": "Phase 3 implemented: verify_chain, source_ref, episode stats.",
+    "namespace": "global",
+    "work_done": ["Added verify_chain MCP tool", "Added source_ref to write_memory"],
+    "next_steps": ["Run mcp_stdio_test.py to verify tool count"],
+    "commits": ["abc1234"]
+  }
+}
+```
+
+### get_episodes — Query the event log
+
+```json
+{
+  "tool": "get_episodes",
+  "arguments": {
+    "caller_id": "claude-code",
+    "project": "memory-layer",
+    "event_type": "action",
+    "limit": 20
+  }
+}
+```
+
+Filter by `session_id`, `project`, `event_type`, `since` (ISO timestamp), or `namespace`.
+
+### verify_chain — Audit hash chain integrity
+
+```json
+{
+  "tool": "verify_chain",
+  "arguments": {
+    "session_id": "ses-20260220-001",
+    "caller_id": "claude-code"
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "session_id": "ses-20260220-001",
+  "event_count": 5,
+  "valid": true,
+  "first_broken_sequence": null,
+  "error": null
+}
+```
+
+`valid: false` means the chain was tampered with. `first_broken_sequence` identifies the earliest broken link.
+
+### get_session_context — Session start briefing
+
+```json
+{
+  "tool": "get_session_context",
+  "arguments": {
+    "caller_id": "claude-code",
+    "namespace": "global"
+  }
+}
+```
+
+Returns recent memories plus `last_handoff` (the most recent `end_session` payload for this namespace). Use at session start to brief the agent on prior context.
+
+### get_usage_report — Tool + episode stats
+
+```json
+{
+  "tool": "get_usage_report",
+  "arguments": {
+    "caller_id": "claude-code",
+    "days": 7
+  }
+}
+```
+
+Response includes an `episodes` key with DB-level aggregate stats:
+
+```json
+{
+  "period_days": 7,
+  "total_calls": 42,
+  "by_tool": { "write_memory": 10, "search_memories": 20 },
+  ...
+  "episodes": {
+    "total_sessions": 5,
+    "finalized_sessions": 4,
+    "total_episodes": 38,
+    "session_end_count": 4,
+    "last_session_ts": "2026-02-20T04:00:00Z"
+  }
+}
+```

@@ -254,6 +254,10 @@ class MemoryStorage:
         """Close a session with a structured handoff payload."""
         return self.episode_storage.end_session(request)
 
+    def verify_chain(self, session_id: str) -> dict[str, Any]:
+        """Walk the hash chain for a session and report integrity."""
+        return self.episode_storage.verify_chain(session_id)
+
     def update_memory(
         self,
         request: UpdateMemoryRequest | dict[str, Any],

@@ -63,6 +63,7 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
         writer_id: str = "unknown",
         writer_type: str = "agent",
         source_project: str | None = None,
+        source_ref: str | None = None,
         confidence: float = 1.0,
     ) -> Any:
         return _run_tool(
@@ -74,6 +75,7 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
                 "writer_id": writer_id,
                 "writer_type": writer_type,
                 "source_project": source_project,
+                "source_ref": source_ref,
                 "confidence": confidence,
             },
             _tool_name="write_memory",
@@ -208,6 +210,7 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
     ) -> Any:
         start = time.monotonic()
         result = usage_reporter.report(days=days, namespace=namespace)
+        result["episodes"] = memory_storage.episode_storage.episode_stats()
         usage_logger.log("get_usage_report", caller_id, namespace, (time.monotonic() - start) * 1000, "success")
         return result
 
@@ -298,6 +301,15 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
             _tool_name="end_session",
             _caller_id=agent_id,
             _namespace=namespace,
+        )
+
+    @app.tool()
+    def verify_chain(session_id: str, caller_id: str = "unknown") -> Any:
+        return _run_tool(
+            memory_storage.verify_chain,
+            session_id,
+            _tool_name="verify_chain",
+            _caller_id=caller_id,
         )
 
     @app.tool()

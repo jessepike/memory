@@ -56,6 +56,10 @@ class SQLiteMemoryDB:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
             conn.execute("PRAGMA temp_store=MEMORY;")
+            # Migration: add source_ref to memories if not present (v1.1 Phase 3)
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(memories);")}
+            if "source_ref" not in existing:
+                conn.execute("ALTER TABLE memories ADD COLUMN source_ref TEXT;")
 
     @contextmanager
     def begin_immediate(self) -> Iterator[sqlite3.Connection]:
@@ -75,10 +79,10 @@ class SQLiteMemoryDB:
         sql = """
         INSERT INTO memories (
             id, content, memory_type, namespace, writer_id, writer_type,
-            source_project, idempotency_key, confidence, status, created_at, updated_at
+            source_project, source_ref, idempotency_key, confidence, status, created_at, updated_at
         ) VALUES (
             :id, :content, :memory_type, :namespace, :writer_id, :writer_type,
-            :source_project, :idempotency_key, :confidence, :status, :created_at, :updated_at
+            :source_project, :source_ref, :idempotency_key, :confidence, :status, :created_at, :updated_at
         );
         """
         try:
@@ -555,6 +559,27 @@ class SQLiteMemoryDB:
         with self._connect() as conn:
             row = conn.execute(sql, params).fetchone()
         return self._row_to_episode(row) if row else None
+
+    def get_episode_stats(self) -> dict[str, Any]:
+        """Return aggregate session/episode counts for usage reporting."""
+        sql_sessions = "SELECT COUNT(*) AS total, SUM(finalized) AS finalized FROM sessions;"
+        sql_episodes = "SELECT COUNT(*) AS total FROM episodes;"
+        sql_session_ends = "SELECT COUNT(*) AS total FROM episodes WHERE event_type = 'session_end';"
+        sql_last_ts = "SELECT MAX(start_ts) AS last_ts FROM sessions;"
+
+        with self._connect() as conn:
+            sess_row = conn.execute(sql_sessions).fetchone()
+            ep_row = conn.execute(sql_episodes).fetchone()
+            se_row = conn.execute(sql_session_ends).fetchone()
+            last_row = conn.execute(sql_last_ts).fetchone()
+
+        return {
+            "total_sessions": int(sess_row["total"] or 0),
+            "finalized_sessions": int(sess_row["finalized"] or 0),
+            "total_episodes": int(ep_row["total"] or 0),
+            "session_end_count": int(se_row["total"] or 0),
+            "last_session_ts": last_row["last_ts"] if last_row else None,
+        }
 
     def _row_to_session(self, row: sqlite3.Row) -> SessionRecord:
         data = dict(row)
