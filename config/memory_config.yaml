@@ -17,14 +17,34 @@ runtime:
 
 client_profiles:
   claude-code:
-    allowed_namespaces: [global, memory-layer, krypton, knowledge-base, capabilities-registry, adf]
+    allowed_namespaces: [global, memory-layer, krypton, knowledge-base, capabilities-registry, adf, even-ground]
+    can_cross_scope: false
+    can_access_private: false
+  claude-opus:
+    allowed_namespaces: [global, memory-layer, krypton, knowledge-base, capabilities-registry, adf, even-ground]
     can_cross_scope: false
     can_access_private: false
   krypton:
     allowed_namespaces: [global, krypton, memory-layer, knowledge-base, capabilities-registry, adf]
     can_cross_scope: true
     can_access_private: false
+  krypton-session:
+    allowed_namespaces: [global, krypton, memory-layer, knowledge-base, capabilities-registry, adf]
+    can_cross_scope: true
+    can_access_private: false
   adf:
     allowed_namespaces: [global, adf]
     can_cross_scope: false
+    can_access_private: false
+  codex:
+    allowed_namespaces: [global, even-ground]
+    can_cross_scope: false
+    can_access_private: false
+  nerve-center:
+    allowed_namespaces: [global]
+    can_cross_scope: true
+    can_access_private: false
+  weekly-digest:
+    allowed_namespaces: [global]
+    can_cross_scope: true
     can_access_private: false

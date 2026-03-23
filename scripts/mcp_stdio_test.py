@@ -51,6 +51,7 @@ def run_stdio_test() -> dict[str, Any]:
                 paths:
                   sqlite_db: {temp_root / 'memory.db'}
                   chroma_dir: {temp_root / 'chroma'}
+                  usage_log: {temp_root / 'usage.jsonl'}
                 embedding:
                   model_name: all-MiniLM-L6-v2
                   allow_model_download_during_setup: true

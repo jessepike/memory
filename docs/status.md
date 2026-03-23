@@ -1,7 +1,7 @@
 ---
 project: "Memory Layer"
 stage: "Deliver"
-updated: "2026-02-19"
+updated: "2026-02-23"
 ---
 
 # Status
@@ -218,5 +218,6 @@ updated: "2026-02-19"
 | 2026-02-20 | Validator run: PASS. Fixed race condition, scale/concurrency tests, metadata MCP param. 119 tests. |
 | 2026-02-20 | Phase 2 complete: /handoff skill, CLAUDE.md briefing protocol, SessionEnd hook, transcript extractor. |
 | 2026-02-20 | Phase 3 complete: verify_chain MCP tool, source_ref on write_memory, episode stats in get_usage_report, usage.md updated. 126 tests pass. |
+| 2026-02-23 | Cleanup: purged 227 demo entries from usage.jsonl, fixed smoke scripts to isolate usage_log in temp dir. Error rate 13.8%→0.6%. |
 | 2026-02-20 | Phase 4 daily checks: daily_check.py + SessionStart hook. Memory validated. Moving on. |
 | 2026-02-19 | Phase 4 started: 2-week measurement period. Baseline: 2 sessions, 6 episodes, 1 handoff + 5 hook captures. Capture rate script added. |
