@@ -255,6 +255,15 @@ class SQLiteMemoryDB:
             rows = conn.execute(sql, [status.value for status in statuses]).fetchall()
         return [UUID(row["id"]) for row in rows]
 
+    def count_by_namespace(self, namespace: str) -> int:
+        """Return count of committed memories in a specific namespace."""
+        sql = "SELECT COUNT(*) AS count FROM memories WHERE namespace = ? AND status IN (?, ?);"
+        with self._connect() as conn:
+            row = conn.execute(
+                sql, (namespace, MemoryStatus.STAGED.value, MemoryStatus.COMMITTED.value)
+            ).fetchone()
+        return int(row["count"]) if row else 0
+
     def stats_committed(self, namespaces: list[str] | None = None) -> MemoryStats:
         """Compute committed-only stats for normal read surfaces."""
         where_parts = ["status = ?"]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -30,8 +31,13 @@ class EpisodeStorage:
     - verify_chain: chain integrity check for a session
     """
 
-    def __init__(self, db: SQLiteMemoryDB) -> None:
+    def __init__(
+        self,
+        db: SQLiteMemoryDB,
+        namespace_resolver: Callable[[str | None], str] | None = None,
+    ) -> None:
         self.db = db
+        self._resolve_namespace = namespace_resolver or (lambda ns: ns if ns else "global")
 
     def write_episode(
         self,
@@ -48,13 +54,14 @@ class EpisodeStorage:
             else WriteEpisodeRequest.model_validate(request)
         )
 
+        resolved_ns = self._resolve_namespace(req.namespace)
         session_id = req.session_id or generate_session_id()
 
         # Ensure session exists (idempotent — returns existing if already there)
         self.db.get_or_create_session(
             session_id=session_id,
             creator=req.agent_id,
-            namespace=req.namespace,
+            namespace=resolved_ns,
             client=req.client,
             project=req.project,
         )
@@ -71,7 +78,7 @@ class EpisodeStorage:
             "agent_id": req.agent_id,
             "client": req.client,
             "project": req.project,
-            "namespace": req.namespace,
+            "namespace": resolved_ns,
             "content": req.content,
             "metadata": req.metadata,
             "source_ref": req.source_ref,
@@ -137,11 +144,13 @@ class EpisodeStorage:
             else EndSessionRequest.model_validate(request)
         )
 
+        resolved_ns = self._resolve_namespace(req.namespace)
+
         # Ensure session exists
         self.db.get_or_create_session(
             session_id=req.session_id,
             creator=req.agent_id,
-            namespace=req.namespace,
+            namespace=resolved_ns,
         )
 
         handoff_metadata: dict[str, Any] = {
@@ -168,7 +177,7 @@ class EpisodeStorage:
             "event_type": "session_end",
             "severity": "info",
             "agent_id": req.agent_id,
-            "namespace": req.namespace,
+            "namespace": resolved_ns,
             "content": req.summary,
             "metadata": handoff_metadata,
             "schema_version": 1,

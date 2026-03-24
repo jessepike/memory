@@ -87,6 +87,50 @@ class ClientProfile(BaseModel):
     can_access_private: bool = False
 
 
+class NamespaceEntry(BaseModel):
+    """A single canonical namespace with optional aliases."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    aliases: list[str] = Field(default_factory=list)
+
+
+class NamespaceRegistry(BaseModel):
+    """Controlled vocabulary of canonical namespaces with alias resolution."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    canonical: dict[str, NamespaceEntry] = Field(default_factory=dict)
+    unscoped_target: str = "_unscoped"
+
+    @field_validator("canonical")
+    @classmethod
+    def validate_no_alias_collisions(cls, canonical: dict[str, NamespaceEntry]) -> dict[str, NamespaceEntry]:
+        seen: dict[str, str] = {}
+        for name, entry in canonical.items():
+            if name in seen:
+                raise ValueError(f"Canonical name '{name}' collides with alias of '{seen[name]}'")
+            for alias in entry.aliases:
+                if alias in seen:
+                    raise ValueError(f"Alias '{alias}' defined in '{name}' collides with '{seen[alias]}'")
+                if alias in canonical:
+                    raise ValueError(f"Alias '{alias}' in '{name}' collides with canonical name '{alias}'")
+                seen[alias] = name
+            seen[name] = name
+        return canonical
+
+    def resolve(self, raw: str | None) -> str:
+        """Resolve an alias or None to a canonical namespace."""
+        if raw is None or raw.strip() == "":
+            return self.unscoped_target
+        if raw in self.canonical:
+            return raw
+        for name, entry in self.canonical.items():
+            if raw in entry.aliases:
+                return name
+        return raw
+
+
 class PathsConfig(BaseModel):
     """Filesystem paths for runtime state."""
 
@@ -132,6 +176,7 @@ class MemoryConfig(BaseModel):
     consolidation: ConsolidationConfig = Field(default_factory=ConsolidationConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     client_profiles: dict[str, ClientProfile] = Field(default_factory=dict)
+    namespaces: NamespaceRegistry | None = None
 
 
 class WriteMemoryRequest(MemoryBase):

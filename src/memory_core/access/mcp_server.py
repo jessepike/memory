@@ -313,9 +313,15 @@ def create_server(storage: MemoryStorage | None = None, *, config_path: str = "c
         )
 
     @app.tool()
-    def health(caller_id: str = "unknown") -> dict[str, str]:
+    def health(caller_id: str = "unknown") -> dict[str, Any]:
         start = time.monotonic()
-        result = {"status": "ok"}
+        result: dict[str, Any] = {"status": "ok"}
+        try:
+            unscoped_count = memory_storage.db.count_by_namespace("_unscoped")
+            if unscoped_count > 0:
+                result["unscoped_memories"] = unscoped_count
+        except Exception:
+            pass
         usage_logger.log("health", caller_id, None, (time.monotonic() - start) * 1000, "success")
         return result
 

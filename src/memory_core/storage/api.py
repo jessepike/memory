@@ -18,6 +18,7 @@ from memory_core.models import (
     MemoryConfig,
     MemoryEntry,
     MemoryStatus,
+    NamespaceRegistry,
     SearchResultItem,
     StatsResponse,
     UpdateMemoryRequest,
@@ -68,7 +69,10 @@ class MemoryStorage:
         self.db = db or SQLiteMemoryDB(config.paths.sqlite_db)
         self.vector_store = vector_store or ChromaVectorStore(config.paths.chroma_dir)
         self.embeddings = embeddings or EmbeddingService(config, mode=EmbeddingMode.RUNTIME)
-        self.episode_storage = episode_storage or EpisodeStorage(self.db)
+        self._namespace_registry = config.namespaces
+        self.episode_storage = episode_storage or EpisodeStorage(
+            self.db, namespace_resolver=self._resolve_namespace,
+        )
         self.last_reconcile_at: str | None = None
 
     @classmethod
@@ -82,9 +86,20 @@ class MemoryStorage:
         self.vector_store.initialize()
         self.embeddings.preflight()
 
+    def _resolve_namespace(self, raw: str | None) -> str:
+        """Resolve a namespace alias to its canonical name via the registry."""
+        if self._namespace_registry is not None:
+            return self._namespace_registry.resolve(raw)
+        if raw is None or raw.strip() == "":
+            return "_unscoped"
+        return raw
+
     def write_memory(self, request: WriteMemoryRequest | dict[str, Any]) -> WriteMemoryResponse:
         """Write memory with deterministic + semantic dedup."""
         req = request if isinstance(request, WriteMemoryRequest) else WriteMemoryRequest.model_validate(request)
+        resolved_ns = self._resolve_namespace(req.namespace)
+        if resolved_ns != req.namespace:
+            req = req.model_copy(update={"namespace": resolved_ns})
         idempotency_key = build_idempotency_key(req.namespace, req.content)
         now = datetime.now(UTC)
         entry = MemoryEntry(
