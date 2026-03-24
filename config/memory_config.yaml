@@ -12,6 +12,15 @@ embedding:
 consolidation:
   similarity_threshold: 0.88
 
+staleness:
+  # Per-type shelf life in days. Memories older than this are flagged for review.
+  # null = never stale
+  observation: 30
+  progress: 30
+  decision: 90
+  preference: null
+  relationship: null
+
 runtime:
   enforce_offline: true
 
@@ -35,9 +44,9 @@ namespaces:
     knowledge-base:
       aliases: []
     krypton:
-      aliases: []
+      aliases: [project-krypton]
     nerve-center:
-      aliases: []
+      aliases: [project-nerve-center]
     work-management:
       aliases: []
     adf:
@@ -64,6 +73,8 @@ namespaces:
       aliases: []
     tcdc:
       aliases: [tcdc-website-prototype]
+    vet:
+      aliases: [project-vetmate, vetmate]
 
 client_profiles:
   claude-code:
@@ -85,6 +96,10 @@ client_profiles:
   adf:
     allowed_namespaces: [global, adf]
     can_cross_scope: false
+    can_access_private: false
+  maintenance:
+    allowed_namespaces: [global, memory, krypton, knowledge-base, capabilities-registry, adf, even-ground, pike, risk, agf, diagram-forge, work-management, nerve-center, vet, dowell, tcdc, link-triage-pipeline, pike-agents, _unscoped]
+    can_cross_scope: true
     can_access_private: false
   nerve-center:
     allowed_namespaces: [global]

@@ -131,6 +131,22 @@ class NamespaceRegistry(BaseModel):
         return raw
 
 
+class StalenessConfig(BaseModel):
+    """Per-type shelf life in days. None = never stale."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    observation: int | None = 14
+    progress: int | None = 14
+    decision: int | None = 90
+    preference: int | None = None
+    relationship: int | None = None
+
+    def max_age_days(self, memory_type: str) -> int | None:
+        """Return shelf life for a memory type, or None if never stale."""
+        return getattr(self, memory_type, None)
+
+
 class PathsConfig(BaseModel):
     """Filesystem paths for runtime state."""
 
@@ -174,6 +190,7 @@ class MemoryConfig(BaseModel):
     paths: PathsConfig = Field(default_factory=PathsConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     consolidation: ConsolidationConfig = Field(default_factory=ConsolidationConfig)
+    staleness: StalenessConfig = Field(default_factory=StalenessConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     client_profiles: dict[str, ClientProfile] = Field(default_factory=dict)
     namespaces: NamespaceRegistry | None = None
