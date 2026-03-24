@@ -15,6 +15,7 @@ updated: "2026-02-24"
 
 | id | priority | status | owner | description | why | done_when |
 |----|----------|--------|-------|-------------|-----|-----------|
+| V2-01 | P2 | todo | agent | Krypton GM: search-before-write for pattern-tracking observations | GM agent writes daily incremental observations (e.g., "smoke test deferred day N") as new entries instead of updating existing ones. This created 15+ near-duplicate memories before manual cleanup. GM should search for existing pattern memories and update them rather than creating new entries each day. | GM agent searches before writing pattern-tracking observations; daily increments update existing memory instead of creating new entries. Verified by running 3+ daily cycles with zero duplicate clusters. |
 
 ## Done
 

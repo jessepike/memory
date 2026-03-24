@@ -10,7 +10,7 @@ embedding:
   allow_model_download_during_setup: true
 
 consolidation:
-  similarity_threshold: 0.92
+  similarity_threshold: 0.88
 
 runtime:
   enforce_offline: true
