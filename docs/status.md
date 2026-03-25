@@ -1,27 +1,25 @@
 ---
 project: "Memory Layer"
 stage: "Deliver"
-updated: "2026-02-23"
+updated: "2026-03-24"
 ---
 
 # Status
 
 ## Current State
 
-- **Phase:** v1.1 Phase 4 — Daily checks + iteration (started 2026-02-19).
-- **Focus:** SessionStart hook surfaces daily capture stats automatically. Review weekly with `measure_capture.py --days 7`. Decide v1.2 direction after ~10 sessions of data.
+- **Phase:** v2.0 — Namespace governance + maintenance automation.
+- **Focus:** Namespace sprawl resolved, staleness/maintenance automated, backlog queued for scheduled execution on Mac Mini.
+- **Corpus:** 461 committed memories (cleaned from 482). Zero drift, zero duplicates, zero unscoped.
+- **Tests:** 126 passing.
 
 ## Next Steps
 
-- [x] **FIX-01 (P0):** Add `client_profiles` to `config/memory_config.yaml` — profiles for claude-code, krypton, adf.
-- [x] **FIX-02 (P0):** Fix `scripts/mcp_stdio_test.py` line 121 — tool count assertion (14→15).
-- [x] **Research:** Hook capabilities for Claude Code, Codex CLI, Gemini CLI. PreCompact can't call MCP tools. SessionEnd is best capture point. Codex has no hooks at all.
-- [x] **Design review:** `docs/design-capture-governance.md` — internal + external (Gemini, GPT). 14 issues resolved.
-- [x] **Implement v1.1 Phase 1:** Episodic log (SQLite, hash-chained), write_episode/get_episodes/end_session MCP tools. 119 tests pass. Validator: PASS.
-- [x] **Implement v1.1 Phase 2:** /handoff Claude Code skill, CLAUDE.md briefing-not-autopilot protocol, SessionEnd hook, transcript extractor (Python, structured parsing), Codex AGENTS.md update. Design ref: Section 8 items 7-13.
-- [x] **Implement v1.1 Phase 3:** verify_chain MCP tool, source_ref on write_memory, episode stats in get_usage_report, docs update. Design ref: Section 8 items 14-17.
-- [ ] **Hybrid search (FTS5/BM25):** Add SQLite FTS5 keyword search alongside Chroma vector search in `search_memories`. 70/30 fusion. Low-cost, high-value for technical content. See `docs/research-synthesis.md`.
-- [x] **Citation tracking:** `source_ref` field added to `write_memory` in Phase 3. Schema migration included.
+- [ ] **V2-01:** Krypton GM search-before-write for pattern-tracking observations
+- [ ] **V2-02:** Schedule memory_maintenance.py as Krypton job (noon + 8pm) — blocked on Mac Mini wiring
+- [ ] **V2-03:** Type rebalancing — update agent prompts to capture more decisions/preferences
+- [ ] **V2-04:** LLM-based consolidation for 0.75-0.88 similarity zone (~June 2026 revisit)
+- [ ] **Hybrid search (FTS5/BM25):** Add SQLite FTS5 keyword search alongside Chroma vector search in `search_memories`. 70/30 fusion. Low-cost, high-value for technical content.
 
 - [x] POST-01: Define memory routing heuristic (MCP vs auto-memory)
 - [x] POST-02: Add usage logging to MCP server (observability foundation)
@@ -221,3 +219,4 @@ updated: "2026-02-23"
 | 2026-02-23 | Cleanup: purged 227 demo entries from usage.jsonl, fixed smoke scripts to isolate usage_log in temp dir. Error rate 13.8%→0.6%. |
 | 2026-02-20 | Phase 4 daily checks: daily_check.py + SessionStart hook. Memory validated. Moving on. |
 | 2026-02-19 | Phase 4 started: 2-week measurement period. Baseline: 2 sessions, 6 episodes, 1 handoff + 5 hook captures. Capture rate script added. |
+| 2026-03-24 | New laptop migration + v2.0 namespace governance. Validated MCP on new laptop (health, write/read round-trip). Built canonical namespace registry with auto-normalization (13 aliases → canonical repo names). Migrated 17 memories + 10 sessions + 19 episodes + 17 Chroma entries. Fixed client profiles (memory-layer→memory, collapsed krypton-session, expanded codex/claude-opus access). Lowered dedup threshold 0.92→0.88 to catch daily-increment near-duplicates. Added staleness config (30d observations, 90d decisions, preferences never). Created `scripts/memory_maintenance.py` (staleness sweep, duplicate detection, unscoped check, reconcile). Added maintenance client profile. Ran first-ever reconcile (clean). Archived 38 stale/duplicate memories. Corpus: 482→461 clean. Research: surveyed Mem0, Zep, LangGraph, AWS AgentCore, Letta, community patterns for namespace and memory organization. Backlogged V2-01 through V2-04. |
